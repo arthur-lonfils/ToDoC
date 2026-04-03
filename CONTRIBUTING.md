@@ -24,16 +24,24 @@ make test     # run test suite
 ```
 story/<description>     # Features, refactors, improvements, tests, docs
 defect/<description>    # Bug fixes
+release/v<X.Y.Z>        # Version releases
 ```
 
 Branch names are validated by CI. Use lowercase with hyphens (e.g., `story/add-export-json`, `defect/fix-limit-clause`).
 
 ### Workflow
 
-1. Create a branch from `main` following the naming convention
+**Development:**
+1. Create a `story/` or `defect/` branch from `main`
 2. Make changes with conventional commits
 3. Open a PR to `main` — CI runs build, test, format-check, commit lint
-4. Squash merge — CI auto-bumps version, updates changelog, tags, creates GitHub release
+4. Squash merge into `main`
+
+**Release:**
+1. Create `release/vX.Y.Z` from `main` and push it
+2. CI auto-commits version bump + changelog to the branch
+3. Open a PR to `main`, review the changelog
+4. Merge — CI creates git tag + GitHub Release
 
 ### Commit Messages
 
@@ -106,29 +114,30 @@ Tests run against an isolated temporary database (overrides `$HOME`). Your real 
 
 Versions follow [Semantic Versioning](https://semver.org/). While pre-v1.0.0, `feat` bumps minor, `fix` bumps patch.
 
-### Automated (CI)
+### Release flow
 
-Releases happen automatically when a PR with `feat`/`fix`/`perf` commits is merged to `main`. The release workflow:
+1. Create a release branch from `main`:
+   ```bash
+   git checkout main && git pull
+   git checkout -b release/v0.2.0
+   git push -u origin release/v0.2.0
+   ```
 
-1. Detects the version bump from conventional commits (via git-cliff)
-2. Updates `.version` and `src/cli.c` version string
-3. Generates `CHANGELOG.md`
-4. Commits, tags, pushes
-5. Creates a GitHub Release with changelog notes
+2. CI **automatically** commits the version bump, changelog update, and source version to the release branch.
 
-### Manual
+3. Open a PR from `release/v0.2.0` to `main` — review the generated changelog.
+
+4. Merge the PR — CI automatically creates the git tag and GitHub Release.
+
+### Manual (local)
+
+For local testing or when CI is unavailable:
 
 ```bash
-make release                    # auto-detect bump from commits
+./scripts/release.sh            # auto-detect bump from commits
 ./scripts/release.sh 0.2.0     # explicit version
-git push origin main --tags     # push release
+git push origin main --tags
 ```
-
-The release script:
-1. Validates clean working tree
-2. Bumps `.version` and `src/cli.c` version string
-3. Generates `CHANGELOG.md` via git-cliff
-4. Commits and creates an annotated tag
 
 ## Project Structure
 
