@@ -24,7 +24,6 @@ make test     # run test suite
 ```
 story/<description>     # Features, refactors, improvements, tests, docs
 defect/<description>    # Bug fixes
-release/v<X.Y.Z>        # Version releases
 ```
 
 Branch names are validated by CI. Use lowercase with hyphens (e.g., `story/add-export-json`, `defect/fix-limit-clause`).
@@ -38,11 +37,11 @@ Branch names are validated by CI. Use lowercase with hyphens (e.g., `story/add-e
 4. Squash merge into `main`
 
 **Release** (maintainers only):
-1. Create `release/vX.Y.Z` from `main` and push it
-2. CI auto-commits version bump + changelog to the branch
-3. Open a PR to `main`, review the generated changelog
-4. **Regular merge** (not squash) — preserves the `chore: release vX.Y.Z` commit
-5. CI creates git tag + GitHub Release automatically
+```bash
+git checkout main && git pull
+make release
+```
+The release script bumps the version, generates the changelog, builds, tests, commits, tags, and pushes. CI then builds the binary and creates the GitHub Release automatically.
 
 ### Commit Messages
 
@@ -75,14 +74,13 @@ feat(cli)!: change --format flag to require explicit value
 
 ### Merge Strategy
 
-- **`story/` and `defect/` branches:** squash merge into `main` (clean linear history)
-- **`release/` branches:** regular merge into `main` (preserves the version bump commit)
+Squash merge feature/defect branches into `main` (clean linear history).
 
 ### Branch Rules
 
 The `main` branch is protected:
 
-- **No direct push** — all changes go through pull requests
+- **No direct push** — all changes go through pull requests (releases push via admin bypass)
 - **Required status checks** before merge:
   - `build-and-test` — compile + 56 tests + valgrind
   - `branch-name` — validates branch naming convention
@@ -91,7 +89,7 @@ The `main` branch is protected:
 - **Branch must be up to date** with `main` before merging
 - **Delete branch on merge** — keeps the repo clean
 
-Only `story/*`, `defect/*`, and `release/v*` branches can target `main`.
+Only `story/*` and `defect/*` branches can target `main` via PR.
 
 ## Code Quality
 
@@ -131,30 +129,20 @@ Tests run against an isolated temporary database (overrides `$HOME`). Your real 
 
 Versions follow [Semantic Versioning](https://semver.org/). While pre-v1.0.0, `feat` bumps minor, `fix` bumps patch.
 
-### Release flow
-
-1. Create a release branch from `main`:
-   ```bash
-   git checkout main && git pull
-   git checkout -b release/v0.2.0
-   git push -u origin release/v0.2.0
-   ```
-
-2. CI **automatically** commits the version bump, changelog update, and source version to the release branch.
-
-3. Open a PR from `release/v0.2.0` to `main` — review the generated changelog.
-
-4. Merge the PR — CI automatically creates the git tag and GitHub Release.
-
-### Manual (local)
-
-For local testing or when CI is unavailable:
-
 ```bash
-./scripts/release.sh            # auto-detect bump from commits
-./scripts/release.sh 0.2.0     # explicit version
-git push origin main --tags
+git checkout main && git pull
+make release                        # or: ./scripts/release.sh 0.3.0
 ```
+
+The release script:
+1. Validates you're on `main`, working tree is clean, up to date with origin
+2. Auto-detects version bump from conventional commits (or uses explicit version)
+3. Updates `.version` and `src/cli.c`
+4. Generates `CHANGELOG.md` via git-cliff
+5. Builds and runs tests to verify the binary
+6. Commits, tags, and pushes
+
+Pushing the tag triggers CI, which builds the binary and creates the GitHub Release with the changelog and `todoc-linux-x86_64` attached.
 
 ## Project Structure
 

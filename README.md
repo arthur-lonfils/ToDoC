@@ -98,9 +98,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 |---------------------|--------|---------------------------------------------|
 | `story/<desc>`      | `main` | Features, refactors, improvements, tests, docs |
 | `defect/<desc>`     | `main` | Bug fixes, security patches                 |
-| `release/vX.Y.Z`   | `main` | Version release (CI auto-generates changelog) |
 
-All branches target `main` via pull request with squash merge.
+All branches target `main` via pull request with squash merge. Releases are done from `main` via `make release`.
 
 ## Project Structure
 
