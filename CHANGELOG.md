@@ -4,7 +4,11 @@ All notable changes to **todoc** are documented here.
 
 Format based on [Conventional Commits](https://conventionalcommits.org).
 
-## [0.2.0] — 2026-04-03
+## [0.3.0] — 2026-04-03
+
+### Bug Fixes
+
+- **cli:** Use TODOC_VERSION macro for version output(87eb31b)
 
 ### CI/CD
 
@@ -15,6 +19,7 @@ Format based on [Conventional Commits](https://conventionalcommits.org).
 - Install git-cliff via pip instead of action(10ff203)
 - Checkout main explicitly in publish job (#4)(7efebac)
 - Use merge_commit_sha for publish checkout(0ff2c78)
+- Simplify release to tag-triggered workflow(a4379db)
 
 ### Documentation
 
