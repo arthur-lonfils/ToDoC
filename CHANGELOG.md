@@ -14,6 +14,7 @@ Format based on [Conventional Commits](https://conventionalcommits.org).
 - Use official git-cliff action instead of curl(ce90986)
 - Install git-cliff via pip instead of action(10ff203)
 - Checkout main explicitly in publish job (#4)(7efebac)
+- Use merge_commit_sha for publish checkout(0ff2c78)
 
 ### Documentation
 
