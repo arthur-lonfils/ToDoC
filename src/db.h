@@ -3,6 +3,7 @@
 
 #include "model.h"
 
+#include <sqlite3.h>
 #include <stdint.h>
 
 /* Open the database at ~/.todoc/todoc.db (creates dir if needed) */
@@ -11,7 +12,10 @@ todoc_err_t db_open(void);
 /* Close the database connection */
 void db_close(void);
 
-/* Create the schema (tasks table + triggers). Called by `todoc init` */
+/* Get the raw sqlite3 handle (for the migration runner) */
+sqlite3 *db_get_handle(void);
+
+/* Run all pending migrations. Called by `todoc init` */
 todoc_err_t db_init_schema(void);
 
 /* ── CRUD ────────────────────────────────────────────────────── */

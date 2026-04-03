@@ -1,4 +1,5 @@
 #include "db.h"
+#include "migrate.h"
 #include "util.h"
 
 #include <sqlite3.h>
@@ -18,6 +19,11 @@ const char *db_last_error(void)
         return sqlite3_errmsg(g_db);
     }
     return "database not open";
+}
+
+sqlite3 *db_get_handle(void)
+{
+    return g_db;
 }
 
 /* Read a nullable TEXT column as a strdup'd string (or NULL) */
@@ -98,38 +104,11 @@ void db_close(void)
     }
 }
 
-/* ── Schema ──────────────────────────────────────────────────── */
+/* ── Schema (delegates to migration system) ──────────────────── */
 
 todoc_err_t db_init_schema(void)
 {
-    const char *sql =
-        "CREATE TABLE IF NOT EXISTS tasks ("
-        "  id          INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "  title       TEXT    NOT NULL,"
-        "  description TEXT,"
-        "  type        INTEGER NOT NULL DEFAULT 1,"
-        "  priority    INTEGER NOT NULL DEFAULT 2,"
-        "  status      INTEGER NOT NULL DEFAULT 0,"
-        "  scope       TEXT,"
-        "  due_date    TEXT,"
-        "  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now','localtime')),"
-        "  updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now','localtime'))"
-        ");"
-        "CREATE TRIGGER IF NOT EXISTS tasks_updated_at "
-        "  AFTER UPDATE ON tasks FOR EACH ROW "
-        "BEGIN "
-        "  UPDATE tasks SET updated_at = strftime('%Y-%m-%dT%H:%M:%S','now','localtime') "
-        "  WHERE id = OLD.id; "
-        "END;";
-
-    char *err_msg = NULL;
-    int rc = sqlite3_exec(g_db, sql, NULL, NULL, &err_msg);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "todoc: schema init failed: %s\n", err_msg);
-        sqlite3_free(err_msg);
-        return TODOC_ERR_DB;
-    }
-    return TODOC_OK;
+    return migrate_run_all();
 }
 
 /* ── Insert ──────────────────────────────────────────────────── */
