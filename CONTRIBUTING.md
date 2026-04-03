@@ -26,6 +26,15 @@ story/<description>     # Features, refactors, improvements, tests, docs
 defect/<description>    # Bug fixes
 ```
 
+Branch names are validated by CI. Use lowercase with hyphens (e.g., `story/add-export-json`, `defect/fix-limit-clause`).
+
+### Workflow
+
+1. Create a branch from `main` following the naming convention
+2. Make changes with conventional commits
+3. Open a PR to `main` — CI runs build, test, format-check, commit lint
+4. Squash merge — CI auto-bumps version, updates changelog, tags, creates GitHub release
+
 ### Commit Messages
 
 We follow [Conventional Commits](https://conventionalcommits.org). The `commit-msg` hook enforces this automatically.
@@ -96,6 +105,18 @@ Tests run against an isolated temporary database (overrides `$HOME`). Your real 
 ## Releasing
 
 Versions follow [Semantic Versioning](https://semver.org/). While pre-v1.0.0, `feat` bumps minor, `fix` bumps patch.
+
+### Automated (CI)
+
+Releases happen automatically when a PR with `feat`/`fix`/`perf` commits is merged to `main`. The release workflow:
+
+1. Detects the version bump from conventional commits (via git-cliff)
+2. Updates `.version` and `src/cli.c` version string
+3. Generates `CHANGELOG.md`
+4. Commits, tags, pushes
+5. Creates a GitHub Release with changelog notes
+
+### Manual
 
 ```bash
 make release                    # auto-detect bump from commits

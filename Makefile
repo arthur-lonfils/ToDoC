@@ -20,8 +20,10 @@ SQL_DIR    = sql/migrations
 EMBED_SCRIPT = sql/embed.sh
 MIGRATIONS_SRC = $(SRC_DIR)/migrations.c
 
-SRCS      = $(wildcard $(SRC_DIR)/*.c)
-OBJS      = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
+# SRCS is evaluated lazily, but migrations.c must exist first.
+# The $(TARGET) rule depends on embed via $(BUILD_DIR)/migrations.o -> $(MIGRATIONS_SRC).
+SRCS      = $(wildcard $(SRC_DIR)/*.c) $(MIGRATIONS_SRC)
+OBJS      = $(sort $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS)))
 TARGET    = $(BUILD_DIR)/todoc
 
 .PHONY: all clean install uninstall embed test test-valgrind setup format format-check quality release
