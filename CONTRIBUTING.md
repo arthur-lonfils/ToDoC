@@ -37,11 +37,12 @@ Branch names are validated by CI. Use lowercase with hyphens (e.g., `story/add-e
 3. Open a PR to `main` — CI runs build, test, format-check, commit lint
 4. Squash merge into `main`
 
-**Release:**
+**Release** (maintainers only):
 1. Create `release/vX.Y.Z` from `main` and push it
 2. CI auto-commits version bump + changelog to the branch
-3. Open a PR to `main`, review the changelog
-4. Merge — CI creates git tag + GitHub Release
+3. Open a PR to `main`, review the generated changelog
+4. **Regular merge** (not squash) — preserves the `chore: release vX.Y.Z` commit
+5. CI creates git tag + GitHub Release automatically
 
 ### Commit Messages
 
@@ -74,7 +75,23 @@ feat(cli)!: change --format flag to require explicit value
 
 ### Merge Strategy
 
-Squash merge feature branches into `main`.
+- **`story/` and `defect/` branches:** squash merge into `main` (clean linear history)
+- **`release/` branches:** regular merge into `main` (preserves the version bump commit)
+
+### Branch Rules
+
+The `main` branch is protected:
+
+- **No direct push** — all changes go through pull requests
+- **Required status checks** before merge:
+  - `build-and-test` — compile + 56 tests + valgrind
+  - `branch-name` — validates branch naming convention
+  - `commit-lint` — validates conventional commit format
+- **At least 1 approval** required (can be bypassed by admins for solo projects)
+- **Branch must be up to date** with `main` before merging
+- **Delete branch on merge** — keeps the repo clean
+
+Only `story/*`, `defect/*`, and `release/v*` branches can target `main`.
 
 ## Code Quality
 
