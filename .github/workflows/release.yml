@@ -102,6 +102,11 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlite3-dev
+
       - name: Install git-cliff
         run: |
           curl -sSfL https://github.com/orhun/git-cliff/releases/latest/download/git-cliff-x86_64-unknown-linux-gnu.tar.gz | tar xz
@@ -113,6 +118,23 @@ jobs:
           BRANCH="${{ github.event.pull_request.head.ref }}"
           VERSION=$(echo "$BRANCH" | sed 's|release/v||')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build release binary
+        run: |
+          make clean
+          make
+          cp build/todoc todoc-linux-x86_64
+          chmod +x todoc-linux-x86_64
+
+      - name: Verify binary version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BINARY_VERSION=$(./todoc-linux-x86_64 version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          if [ "$BINARY_VERSION" != "$VERSION" ]; then
+            echo "ERROR: Binary reports v$BINARY_VERSION but expected v$VERSION"
+            exit 1
+          fi
+          echo "Binary version matches: v$VERSION"
 
       - name: Create tag
         run: |
@@ -133,4 +155,5 @@ jobs:
 
           gh release create "v$VERSION" \
             --title "v$VERSION" \
-            --notes "$NOTES"
+            --notes "$NOTES" \
+            todoc-linux-x86_64
