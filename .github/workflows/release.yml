@@ -27,11 +27,11 @@ jobs:
       - name: Verify source version matches tag
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          SOURCE_VERSION=$(grep -oP '#define TODOC_VERSION "\K[^"]+' src/cli.c)
+          SOURCE_VERSION=$(grep -oP '#define TODOC_VERSION "\K[^"]+' src/cli.h)
           FILE_VERSION=$(cat .version | tr -d '[:space:]')
 
           if [ "$SOURCE_VERSION" != "$VERSION" ]; then
-            echo "::error::src/cli.c has TODOC_VERSION=\"$SOURCE_VERSION\" but tag is v$VERSION. Run scripts/release.sh first."
+            echo "::error::src/cli.h has TODOC_VERSION=\"$SOURCE_VERSION\" but tag is v$VERSION. Run scripts/release.sh first."
             exit 1
           fi
           if [ "$FILE_VERSION" != "$VERSION" ]; then
