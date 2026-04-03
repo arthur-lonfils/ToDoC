@@ -7,7 +7,7 @@
 
 /* ── Version ─────────────────────────────────────────────────── */
 
-#define TODOC_VERSION "0.1.0"
+#define TODOC_VERSION "0.2.0"
 
 /* ── Subcommand lookup ───────────────────────────────────────── */
 

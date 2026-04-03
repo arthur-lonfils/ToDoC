@@ -31,11 +31,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libsqlite3-dev
-
-      - name: Install git-cliff
-        run: |
-          curl -sSfL https://github.com/orhun/git-cliff/releases/latest/download/git-cliff-x86_64-unknown-linux-gnu.tar.gz | tar xz
-          sudo mv git-cliff /usr/local/bin/
+          pip install git-cliff
 
       - name: Extract version from branch name
         id: version
@@ -106,11 +102,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libsqlite3-dev
-
-      - name: Install git-cliff
-        run: |
-          curl -sSfL https://github.com/orhun/git-cliff/releases/latest/download/git-cliff-x86_64-unknown-linux-gnu.tar.gz | tar xz
-          sudo mv git-cliff /usr/local/bin/
+          pip install git-cliff
 
       - name: Extract version
         id: version
