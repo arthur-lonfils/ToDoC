@@ -1,184 +1,50 @@
 name: Release
 
 on:
-  # Prepare release: auto-generate version bump + changelog on the release branch
   push:
-    branches:
-      - 'release/v*'
-
-  # Publish release: tag + GitHub Release when release branch is merged to main
-  pull_request:
-    branches: [main]
-    types: [closed]
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
 
 jobs:
-  # ── Prepare: runs when you push to release/vX.Y.Z ───────────────
-  # Bumps .version, updates src/cli.c, generates CHANGELOG.md, commits.
-  prepare:
+  release:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
 
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libsqlite3-dev
-          pip install git-cliff
-
-      - name: Extract version from branch name
+      - name: Extract version from tag
         id: version
         run: |
-          BRANCH="${GITHUB_REF#refs/heads/}"
-          VERSION=$(echo "$BRANCH" | sed 's|release/v||')
-          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::Invalid version in branch name: '$VERSION'. Expected format: release/vX.Y.Z"
-            exit 1
-          fi
+          VERSION="${GITHUB_REF_NAME#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
+          echo "Releasing v$VERSION"
 
-      - name: Check if already prepared
-        id: check
-        run: |
-          CURRENT=$(cat .version | tr -d '[:space:]')
-          VERSION="${{ steps.version.outputs.version }}"
-
-          if [ "$CURRENT" = "$VERSION" ]; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-            echo "::notice::Version already at v$CURRENT — nothing to prepare. You can open a PR to main."
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-            echo "Bumping v$CURRENT → v$VERSION"
-          fi
-
-      - name: Update version files
-        if: steps.check.outputs.skip == 'false'
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-
-          printf "%s\n" "$VERSION" > .version
-          sed -i "s/#define TODOC_VERSION \".*\"/#define TODOC_VERSION \"$VERSION\"/" src/cli.c
-
-          # Verify the substitution worked
-          if ! grep -q "\"$VERSION\"" src/cli.c; then
-            echo "::error::Failed to update TODOC_VERSION in src/cli.c"
-            exit 1
-          fi
-
-      - name: Generate changelog
-        if: steps.check.outputs.skip == 'false'
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          git-cliff --tag "v$VERSION" --output CHANGELOG.md
-
-          # Verify changelog was generated with content
-          if [ ! -s CHANGELOG.md ]; then
-            echo "::error::CHANGELOG.md is empty after generation"
-            exit 1
-          fi
-
-          if ! grep -q "$VERSION" CHANGELOG.md; then
-            echo "::warning::CHANGELOG.md was generated but doesn't mention v$VERSION — check cliff.toml config"
-          fi
-
-      - name: Build and test
-        if: steps.check.outputs.skip == 'false'
-        run: |
-          make
-          make test
-
-      - name: Commit version bump
-        if: steps.check.outputs.skip == 'false'
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add .version src/cli.c CHANGELOG.md
-          git commit -m "chore: release v$VERSION"
-          git push
-
-      - name: Summary
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          SKIP="${{ steps.check.outputs.skip }}"
-
-          echo "## Release Prepare" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "$SKIP" = "true" ]; then
-            echo "Version **v$VERSION** was already prepared." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Next step: open a PR from \`release/v$VERSION\` to \`main\` and merge it." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "Bumped to **v$VERSION** and committed:" >> $GITHUB_STEP_SUMMARY
-            echo "- \`.version\`" >> $GITHUB_STEP_SUMMARY
-            echo "- \`src/cli.c\` (TODOC_VERSION)" >> $GITHUB_STEP_SUMMARY
-            echo "- \`CHANGELOG.md\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Next step: open a PR from \`release/v$VERSION\` to \`main\` and **regular merge** (not squash)." >> $GITHUB_STEP_SUMMARY
-          fi
-
-  # ── Publish: runs when a release/* PR is merged to main ──────────
-  # Creates the git tag and GitHub Release with binary.
-  publish:
-    runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.merged == true &&
-      startsWith(github.event.pull_request.head.ref, 'release/v')
-
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libsqlite3-dev
-          pip install git-cliff
-
-      - name: Extract version
-        id: version
-        run: |
-          BRANCH="${{ github.event.pull_request.head.ref }}"
-          VERSION=$(echo "$BRANCH" | sed 's|release/v||')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Check tag does not already exist
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "::error::Tag v$VERSION already exists. Delete it first or use a different version."
-            exit 1
-          fi
-
-      - name: Verify source version matches
+      - name: Verify source version matches tag
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           SOURCE_VERSION=$(grep -oP '#define TODOC_VERSION "\K[^"]+' src/cli.c)
           FILE_VERSION=$(cat .version | tr -d '[:space:]')
 
           if [ "$SOURCE_VERSION" != "$VERSION" ]; then
-            echo "::error::src/cli.c has TODOC_VERSION=\"$SOURCE_VERSION\" but expected \"$VERSION\". Was the prepare job run?"
+            echo "::error::src/cli.c has TODOC_VERSION=\"$SOURCE_VERSION\" but tag is v$VERSION. Run scripts/release.sh first."
             exit 1
           fi
           if [ "$FILE_VERSION" != "$VERSION" ]; then
-            echo "::error::.version has \"$FILE_VERSION\" but expected \"$VERSION\". Was the prepare job run?"
+            echo "::error::.version has \"$FILE_VERSION\" but tag is v$VERSION. Run scripts/release.sh first."
             exit 1
           fi
           echo "Source version verified: v$VERSION"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlite3-dev
+          pip install git-cliff
 
       - name: Build release binary
         run: |
@@ -197,15 +63,8 @@ jobs:
           fi
           echo "Binary version verified: v$VERSION"
 
-      - name: Create tag
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git tag -a "v$VERSION" -m "Release v$VERSION"
-          git push origin "v$VERSION"
+      - name: Run tests
+        run: make test
 
       - name: Create GitHub Release
         env:
@@ -222,9 +81,7 @@ jobs:
       - name: Summary
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          echo "## Release Published" >> $GITHUB_STEP_SUMMARY
+          echo "## Release v$VERSION" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**v$VERSION** released successfully:" >> $GITHUB_STEP_SUMMARY
-          echo "- Tag: \`v$VERSION\`" >> $GITHUB_STEP_SUMMARY
           echo "- Binary: \`todoc-linux-x86_64\`" >> $GITHUB_STEP_SUMMARY
           echo "- [View Release](https://github.com/${{ github.repository }}/releases/tag/v$VERSION)" >> $GITHUB_STEP_SUMMARY

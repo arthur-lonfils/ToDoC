@@ -5,12 +5,13 @@
 #   ./scripts/release.sh 0.2.0    # explicit version
 #
 # What it does:
-#   1. Validates clean working tree
+#   1. Validates clean working tree and current branch is main
 #   2. Determines the new version (from git-cliff or argument)
-#   3. Updates .version file
-#   4. Updates TODOC_VERSION in src/cli.c
-#   5. Generates CHANGELOG.md
-#   6. Commits, tags, and optionally pushes
+#   3. Updates .version and src/cli.c
+#   4. Generates CHANGELOG.md
+#   5. Builds and tests to verify
+#   6. Commits and tags
+#   7. Pushes (tag triggers CI → GitHub Release with binary)
 
 set -e
 
@@ -31,9 +32,21 @@ if ! command -v git-cliff > /dev/null 2>&1; then
     error "git-cliff not found. Install: cargo install git-cliff"
 fi
 
-# Check clean working tree
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$BRANCH" != "main" ]; then
+    error "Must be on main branch (currently on '$BRANCH')."
+fi
+
 if [ -n "$(git status --porcelain)" ]; then
     error "Working tree is not clean. Commit or stash changes first."
+fi
+
+# Ensure we're up to date
+git fetch origin main --quiet
+LOCAL=$(git rev-parse HEAD)
+REMOTE=$(git rev-parse origin/main)
+if [ "$LOCAL" != "$REMOTE" ]; then
+    error "Local main is not up to date with origin. Run 'git pull' first."
 fi
 
 # Get current version
@@ -62,6 +75,11 @@ if ! echo "$NEW_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
     error "Invalid version format: '$NEW_VERSION'. Expected: X.Y.Z"
 fi
 
+# Check tag doesn't already exist
+if git rev-parse "v$NEW_VERSION" >/dev/null 2>&1; then
+    error "Tag v$NEW_VERSION already exists."
+fi
+
 # ── Update version references ───────────────────────────────────
 
 info "Updating .version..."
@@ -70,12 +88,33 @@ printf "%s\n" "$NEW_VERSION" > .version
 info "Updating src/cli.c..."
 sed -i "s/#define TODOC_VERSION \".*\"/#define TODOC_VERSION \"$NEW_VERSION\"/" src/cli.c
 
+# Verify substitution worked
+if ! grep -q "\"$NEW_VERSION\"" src/cli.c; then
+    error "Failed to update TODOC_VERSION in src/cli.c"
+fi
+
 # ── Generate changelog ───────────────────────────────────────────
 
 info "Generating CHANGELOG.md..."
 git-cliff --tag "v$NEW_VERSION" --output CHANGELOG.md
 
-# ── Commit and tag ───────────────────────────────────────────────
+# ── Build and test ───────────────────────────────────────────────
+
+info "Building..."
+make clean
+make
+
+info "Testing..."
+make test
+
+# Verify binary version
+BINARY_VERSION=$(./build/todoc version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+if [ "$BINARY_VERSION" != "$NEW_VERSION" ]; then
+    error "Binary reports v$BINARY_VERSION but expected v$NEW_VERSION"
+fi
+info "Binary version verified: v$NEW_VERSION"
+
+# ── Commit, tag, push ───────────────────────────────────────────
 
 info "Committing..."
 git add .version src/cli.c CHANGELOG.md
@@ -84,11 +123,13 @@ git commit -m "chore: release v$NEW_VERSION"
 info "Tagging v$NEW_VERSION..."
 git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
 
+info "Pushing to origin..."
+git push origin main --tags
+
 # ── Done ─────────────────────────────────────────────────────────
 
 echo ""
 info "Released v$NEW_VERSION"
-info ""
-info "Next steps:"
-info "  git push origin main --tags"
+info "CI will now build the binary and create the GitHub Release."
+info "Track progress: https://github.com/$(git remote get-url origin | sed 's/.*github.com[:/]//;s/.git$//')/actions"
 echo ""
