@@ -24,7 +24,7 @@ SRCS      = $(wildcard $(SRC_DIR)/*.c)
 OBJS      = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 TARGET    = $(BUILD_DIR)/todoc
 
-.PHONY: all clean install uninstall embed
+.PHONY: all clean install uninstall embed test test-valgrind
 
 all: $(TARGET)
 
@@ -55,3 +55,9 @@ install: $(TARGET)
 
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/todoc
+
+test: $(TARGET)
+	./tests/run.sh
+
+test-valgrind: $(TARGET)
+	./tests/run.sh --valgrind

@@ -320,11 +320,11 @@ todoc_err_t db_task_list(const task_filter_t *filter, task_t **out_tasks, int *o
                         " ORDER BY priority ASC, created_at DESC");
 
     if (filter && filter->limit > 0) {
-        snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len,
-                 " LIMIT %d", filter->limit);
+        sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len,
+                            " LIMIT %d", filter->limit);
     }
 
-    sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len, ";");
+    snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len, ";");
 
     sqlite3_stmt *stmt = NULL;
     int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
