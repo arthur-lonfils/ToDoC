@@ -77,8 +77,7 @@ static int is_version_applied(int version)
 static todoc_err_t record_migration(int version, const char *name)
 {
     sqlite3 *db = db_get_handle();
-    const char *sql =
-        "INSERT INTO schema_migrations (version, name) VALUES (?, ?);";
+    const char *sql = "INSERT INTO schema_migrations (version, name) VALUES (?, ?);";
 
     sqlite3_stmt *stmt = NULL;
     int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
@@ -145,7 +144,8 @@ todoc_err_t migrate_run_all(void)
     if (applied == 0) {
         display_info("Database schema is up to date (v%d).", migrate_current_version());
     } else {
-        display_success("Applied %d migration(s). Schema now at v%d.", applied, migrate_current_version());
+        display_success("Applied %d migration(s). Schema now at v%d.", applied,
+                        migrate_current_version());
     }
 
     return TODOC_OK;

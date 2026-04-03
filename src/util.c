@@ -92,9 +92,9 @@ int todoc_validate_date(const char *s)
 
     /* Parse and validate ranges */
     struct tm tm_val = {0};
-    int year  = atoi(s);
+    int year = atoi(s);
     int month = atoi(s + 5);
-    int day   = atoi(s + 8);
+    int day = atoi(s + 8);
 
     if (year < 1970 || year > 2100) {
         return 0;
@@ -108,7 +108,7 @@ int todoc_validate_date(const char *s)
 
     /* Use mktime to validate the actual date (e.g., Feb 30 is invalid) */
     tm_val.tm_year = year - 1900;
-    tm_val.tm_mon  = month - 1;
+    tm_val.tm_mon = month - 1;
     tm_val.tm_mday = day;
     tm_val.tm_isdst = -1;
 
@@ -118,8 +118,7 @@ int todoc_validate_date(const char *s)
     }
 
     /* mktime normalizes invalid dates (e.g., Jan 32 -> Feb 1) */
-    if (check.tm_year != tm_val.tm_year ||
-        check.tm_mon  != tm_val.tm_mon  ||
+    if (check.tm_year != tm_val.tm_year || check.tm_mon != tm_val.tm_mon ||
         check.tm_mday != tm_val.tm_mday) {
         return 0;
     }

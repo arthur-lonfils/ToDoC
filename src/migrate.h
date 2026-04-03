@@ -5,14 +5,14 @@
 
 /* A single migration entry (embedded at compile time) */
 typedef struct {
-    int         version;
+    int version;
     const char *name;
     const char *sql;
 } migration_t;
 
 /* Populated by the generated migrations.c */
 extern const migration_t migrations[];
-extern const int          migrations_count;
+extern const int migrations_count;
 
 /* Run all pending migrations. Creates the schema_migrations table if needed.
  * Returns TODOC_OK if all migrations applied (or already up-to-date) */
