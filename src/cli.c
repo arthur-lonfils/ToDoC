@@ -13,28 +13,20 @@
 
 typedef struct {
     const char *name;
-    command_t   cmd;
+    command_t cmd;
 } cmd_entry_t;
 
 static const cmd_entry_t cmd_table[] = {
-    {"init",    CMD_INIT},
-    {"add",     CMD_ADD},
-    {"list",    CMD_LIST},
-    {"ls",      CMD_LIST},
-    {"show",    CMD_SHOW},
-    {"edit",    CMD_EDIT},
-    {"done",    CMD_DONE},
-    {"rm",      CMD_RM},
-    {"remove",  CMD_RM},
-    {"delete",  CMD_RM},
-    {"stats",   CMD_STATS},
-    {"help",    CMD_HELP},
-    {"--help",  CMD_HELP},
-    {"-h",      CMD_HELP},
-    {"version", CMD_VERSION},
-    {"--version", CMD_VERSION},
-    {"-v",      CMD_VERSION},
-    {NULL,      CMD_NONE},
+    {"init", CMD_INIT},         {"add", CMD_ADD},
+    {"list", CMD_LIST},         {"ls", CMD_LIST},
+    {"show", CMD_SHOW},         {"edit", CMD_EDIT},
+    {"done", CMD_DONE},         {"rm", CMD_RM},
+    {"remove", CMD_RM},         {"delete", CMD_RM},
+    {"stats", CMD_STATS},       {"export", CMD_EXPORT},
+    {"help", CMD_HELP},         {"--help", CMD_HELP},
+    {"-h", CMD_HELP},           {"version", CMD_VERSION},
+    {"--version", CMD_VERSION}, {"-v", CMD_VERSION},
+    {NULL, CMD_NONE},
 };
 
 static command_t lookup_command(const char *name)
@@ -122,7 +114,8 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
             }
             task_type_t t = str_to_task_type(val);
             if ((int)t == -1) {
-                fprintf(stderr, "todoc: invalid type '%s' (expected: bug, feature, chore, idea)\n", val);
+                fprintf(stderr, "todoc: invalid type '%s' (expected: bug, feature, chore, idea)\n",
+                        val);
                 return TODOC_ERR_INVALID;
             }
             free(out->type);
@@ -137,7 +130,9 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
             }
             priority_t p = str_to_priority(val);
             if ((int)p == -1) {
-                fprintf(stderr, "todoc: invalid priority '%s' (expected: critical, high, medium, low)\n", val);
+                fprintf(stderr,
+                        "todoc: invalid priority '%s' (expected: critical, high, medium, low)\n",
+                        val);
                 return TODOC_ERR_INVALID;
             }
             free(out->priority);
@@ -151,7 +146,10 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
             }
             status_t s = str_to_status(val);
             if ((int)s == -1) {
-                fprintf(stderr, "todoc: invalid status '%s' (expected: todo, in-progress, done, blocked, cancelled)\n", val);
+                fprintf(stderr,
+                        "todoc: invalid status '%s' (expected: todo, in-progress, done, blocked, "
+                        "cancelled)\n",
+                        val);
                 return TODOC_ERR_INVALID;
             }
             free(out->status);
@@ -192,6 +190,17 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
             }
             free(out->title);
             out->title = todoc_strdup(val);
+        } else if (strcmp(arg, "--format") == 0 || strcmp(arg, "-f") == 0) {
+            const char *val = consume_value(argc, argv, &i, arg);
+            if (!val) {
+                return TODOC_ERR_INVALID;
+            }
+            export_format_t fmt = str_to_export_format(val);
+            if ((int)fmt == -1) {
+                fprintf(stderr, "todoc: invalid format '%s' (expected: csv, json)\n", val);
+                return TODOC_ERR_INVALID;
+            }
+            out->export_format = fmt;
         } else if (strcmp(arg, "--limit") == 0) {
             const char *val = consume_value(argc, argv, &i, arg);
             if (!val) {
@@ -242,8 +251,8 @@ todoc_err_t cli_parse(int argc, char **argv, cli_args_t *out)
         return TODOC_ERR_INVALID;
     }
 
-    if (out->command == CMD_HELP || out->command == CMD_VERSION ||
-        out->command == CMD_INIT || out->command == CMD_STATS) {
+    if (out->command == CMD_HELP || out->command == CMD_VERSION || out->command == CMD_INIT ||
+        out->command == CMD_STATS) {
         return TODOC_OK;
     }
 
@@ -272,41 +281,43 @@ void cli_args_free(cli_args_t *args)
 
 void cli_print_usage(void)
 {
-    printf(
-        "todoc %s — A command-line task manager\n"
-        "\n"
-        "Usage:\n"
-        "  todoc <command> [options]\n"
-        "\n"
-        "Commands:\n"
-        "  init                       Initialize the task database\n"
-        "  add <title> [options]      Add a new task\n"
-        "  list [filters]             List tasks (alias: ls)\n"
-        "  show <id>                  Show full task details\n"
-        "  edit <id> [options]        Edit an existing task\n"
-        "  done <id>                  Mark a task as done\n"
-        "  rm <id>                    Delete a task (aliases: remove, delete)\n"
-        "  stats                      Show task statistics\n"
-        "  help                       Show this help message\n"
-        "  version                    Show version\n"
-        "\n"
-        "Options:\n"
-        "  --title <text>             Task title (positional for add)\n"
-        "  --desc <text>              Task description\n"
-        "  --type, -t <type>          bug, feature, chore, idea\n"
-        "  --priority, -p <priority>  critical, high, medium, low\n"
-        "  --status, -s <status>      todo, in-progress, done, blocked, cancelled\n"
-        "  --scope <tag>              Project/scope tag\n"
-        "  --due <YYYY-MM-DD>         Due date\n"
-        "  --limit <n>                Limit list results\n"
-        "\n"
-        "Examples:\n"
-        "  todoc init\n"
-        "  todoc add \"Fix login bug\" --type bug --priority high --scope auth\n"
-        "  todoc list --status todo --priority critical\n"
-        "  todoc edit 3 --priority low --due 2026-04-15\n"
-        "  todoc done 3\n"
-        "  todoc rm 3\n",
-        TODOC_VERSION
-    );
+    printf("todoc %s — A command-line task manager\n"
+           "\n"
+           "Usage:\n"
+           "  todoc <command> [options]\n"
+           "\n"
+           "Commands:\n"
+           "  init                       Initialize the task database\n"
+           "  add <title> [options]      Add a new task\n"
+           "  list [filters]             List tasks (alias: ls)\n"
+           "  show <id>                  Show full task details\n"
+           "  edit <id> [options]        Edit an existing task\n"
+           "  done <id>                  Mark a task as done\n"
+           "  rm <id>                    Delete a task (aliases: remove, delete)\n"
+           "  stats                      Show task statistics\n"
+           "  export [filters]           Export tasks (default: csv)\n"
+           "  help                       Show this help message\n"
+           "  version                    Show version\n"
+           "\n"
+           "Options:\n"
+           "  --title <text>             Task title (positional for add)\n"
+           "  --desc <text>              Task description\n"
+           "  --type, -t <type>          bug, feature, chore, idea\n"
+           "  --priority, -p <priority>  critical, high, medium, low\n"
+           "  --status, -s <status>      todo, in-progress, done, blocked, cancelled\n"
+           "  --scope <tag>              Project/scope tag\n"
+           "  --due <YYYY-MM-DD>         Due date\n"
+           "  --format, -f <format>      Export format: csv (default), json\n"
+           "  --limit <n>                Limit list results\n"
+           "\n"
+           "Examples:\n"
+           "  todoc init\n"
+           "  todoc add \"Fix login bug\" --type bug --priority high --scope auth\n"
+           "  todoc list --status todo --priority critical\n"
+           "  todoc edit 3 --priority low --due 2026-04-15\n"
+           "  todoc done 3\n"
+           "  todoc rm 3\n"
+           "  todoc export --format json > tasks.json\n"
+           "  todoc export --status done --format csv > done.csv\n",
+           TODOC_VERSION);
 }

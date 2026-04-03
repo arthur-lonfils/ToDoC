@@ -1,6 +1,7 @@
 #ifndef TODOC_CLI_H
 #define TODOC_CLI_H
 
+#include "export.h"
 #include "model.h"
 
 #include <stdint.h>
@@ -17,6 +18,7 @@ typedef enum {
     CMD_DONE,
     CMD_RM,
     CMD_STATS,
+    CMD_EXPORT,
     CMD_HELP,
     CMD_VERSION,
 } command_t;
@@ -24,22 +26,25 @@ typedef enum {
 /* ── Parsed CLI arguments ────────────────────────────────────── */
 
 typedef struct {
-    command_t    command;
+    command_t command;
 
     /* For add/edit */
-    char        *title;
-    char        *description;
-    task_type_t *type;          /* NULL = not specified */
-    priority_t  *priority;
-    status_t    *status;
-    char        *scope;
-    char        *due_date;
+    char *title;
+    char *description;
+    task_type_t *type; /* NULL = not specified */
+    priority_t *priority;
+    status_t *status;
+    char *scope;
+    char *due_date;
 
     /* For show/edit/done/rm */
-    int64_t      task_id;       /* 0 = not set */
+    int64_t task_id; /* 0 = not set */
 
-    /* For list (filter) */
+    /* For list/export (filter) */
     task_filter_t filter;
+
+    /* For export */
+    export_format_t export_format;
 } cli_args_t;
 
 /* Parse argc/argv into a cli_args_t. Returns TODOC_OK or TODOC_ERR_INVALID.
