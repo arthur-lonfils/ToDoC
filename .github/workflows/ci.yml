@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlite3-dev clang-format valgrind
+
+      - name: Check formatting
+        run: make format-check
+
+      - name: Build
+        run: make
+
+      - name: Run tests
+        run: make test
+
+      - name: Run tests with valgrind
+        run: make test-valgrind
+
+  branch-name:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Validate branch name
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          PATTERN="^(story|defect)/[a-z0-9][a-z0-9-]+$"
+
+          if ! echo "$BRANCH" | grep -qE "$PATTERN"; then
+            echo "ERROR: Invalid branch name: '$BRANCH'"
+            echo ""
+            echo "Expected format:"
+            echo "  story/<description>   — features, refactors, docs, tests"
+            echo "  defect/<description>  — bug fixes, security patches"
+            echo ""
+            echo "Use lowercase with hyphens (e.g., story/add-export-json)"
+            exit 1
+          fi
+
+          echo "Branch name '$BRANCH' is valid."
+
+  commit-lint:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Lint commit messages
+        run: |
+          TYPES="feat|fix|refactor|perf|test|chore|docs|ci|build"
+          SCOPES="db|cli|model|display|export|migrate|util|deps"
+          PATTERN="^($TYPES)(\(($SCOPES)\))?!?: .{1,}"
+          MERGE_PATTERN="^(Merge|Revert|fixup!|squash!) "
+
+          FAILED=0
+          while IFS= read -r msg; do
+            if echo "$msg" | grep -qE "$MERGE_PATTERN"; then
+              continue
+            fi
+            if ! echo "$msg" | grep -qE "$PATTERN"; then
+              echo "FAIL: $msg"
+              FAILED=1
+            fi
+          done < <(git log --format='%s' origin/main..HEAD)
+
+          if [ "$FAILED" = 1 ]; then
+            echo ""
+            echo "Commit messages must follow Conventional Commits:"
+            echo "  {type}({scope}): {description}"
+            echo ""
+            echo "  Types:  feat, fix, refactor, perf, test, chore, docs, ci, build"
+            echo "  Scopes: db, cli, model, display, export, migrate, util, deps"
+            exit 1
+          fi
+
+          echo "All commit messages valid."

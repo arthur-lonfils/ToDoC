@@ -6,25 +6,22 @@
 /* ── String lookup tables ────────────────────────────────────── */
 
 static const char *type_strings[TASK_TYPE_COUNT] = {
-    [TASK_TYPE_BUG]     = "bug",
+    [TASK_TYPE_BUG] = "bug",
     [TASK_TYPE_FEATURE] = "feature",
-    [TASK_TYPE_CHORE]   = "chore",
-    [TASK_TYPE_IDEA]    = "idea",
+    [TASK_TYPE_CHORE] = "chore",
+    [TASK_TYPE_IDEA] = "idea",
 };
 
 static const char *priority_strings[PRIORITY_COUNT] = {
     [PRIORITY_CRITICAL] = "critical",
-    [PRIORITY_HIGH]     = "high",
-    [PRIORITY_MEDIUM]   = "medium",
-    [PRIORITY_LOW]      = "low",
+    [PRIORITY_HIGH] = "high",
+    [PRIORITY_MEDIUM] = "medium",
+    [PRIORITY_LOW] = "low",
 };
 
 static const char *status_strings[STATUS_COUNT] = {
-    [STATUS_TODO]        = "todo",
-    [STATUS_IN_PROGRESS] = "in-progress",
-    [STATUS_DONE]        = "done",
-    [STATUS_BLOCKED]     = "blocked",
-    [STATUS_CANCELLED]   = "cancelled",
+    [STATUS_TODO] = "todo",       [STATUS_IN_PROGRESS] = "in-progress", [STATUS_DONE] = "done",
+    [STATUS_BLOCKED] = "blocked", [STATUS_CANCELLED] = "cancelled",
 };
 
 /* ── Lifecycle ───────────────────────────────────────────────── */
@@ -41,12 +38,12 @@ void task_free(task_t *task)
     free(task->created_at);
     free(task->updated_at);
 
-    task->title       = NULL;
+    task->title = NULL;
     task->description = NULL;
-    task->scope       = NULL;
-    task->due_date    = NULL;
-    task->created_at  = NULL;
-    task->updated_at  = NULL;
+    task->scope = NULL;
+    task->due_date = NULL;
+    task->created_at = NULL;
+    task->updated_at = NULL;
 }
 
 void task_filter_free(task_filter_t *filter)
@@ -59,10 +56,10 @@ void task_filter_free(task_filter_t *filter)
     free(filter->type);
     free(filter->scope);
 
-    filter->status   = NULL;
+    filter->status = NULL;
     filter->priority = NULL;
-    filter->type     = NULL;
-    filter->scope    = NULL;
+    filter->type = NULL;
+    filter->scope = NULL;
 }
 
 /* ── Enum -> string ──────────────────────────────────────────── */

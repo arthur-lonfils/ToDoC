@@ -41,16 +41,16 @@ static char *col_text_dup(sqlite3_stmt *stmt, int col)
  *                          scope, due_date, created_at, updated_at */
 static void row_to_task(sqlite3_stmt *stmt, task_t *task)
 {
-    task->id          = sqlite3_column_int64(stmt, 0);
-    task->title       = col_text_dup(stmt, 1);
+    task->id = sqlite3_column_int64(stmt, 0);
+    task->title = col_text_dup(stmt, 1);
     task->description = col_text_dup(stmt, 2);
-    task->type        = (task_type_t)sqlite3_column_int(stmt, 3);
-    task->priority    = (priority_t)sqlite3_column_int(stmt, 4);
-    task->status      = (status_t)sqlite3_column_int(stmt, 5);
-    task->scope       = col_text_dup(stmt, 6);
-    task->due_date    = col_text_dup(stmt, 7);
-    task->created_at  = col_text_dup(stmt, 8);
-    task->updated_at  = col_text_dup(stmt, 9);
+    task->type = (task_type_t)sqlite3_column_int(stmt, 3);
+    task->priority = (priority_t)sqlite3_column_int(stmt, 4);
+    task->status = (status_t)sqlite3_column_int(stmt, 5);
+    task->scope = col_text_dup(stmt, 6);
+    task->due_date = col_text_dup(stmt, 7);
+    task->created_at = col_text_dup(stmt, 8);
+    task->updated_at = col_text_dup(stmt, 9);
 }
 
 /* ── Open / Close ────────────────────────────────────────────── */
@@ -77,8 +77,7 @@ todoc_err_t db_open(void)
         return TODOC_ERR_IO;
     }
 
-    int rc = sqlite3_open_v2(path, &g_db,
-                             SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
+    int rc = sqlite3_open_v2(path, &g_db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
     free(path);
 
     if (rc != SQLITE_OK) {
@@ -162,10 +161,9 @@ todoc_err_t db_task_insert(const task_t *task, int64_t *out_id)
 
 todoc_err_t db_task_get(int64_t id, task_t *out_task)
 {
-    const char *sql =
-        "SELECT id, title, description, type, priority, status, "
-        "       scope, due_date, created_at, updated_at "
-        "FROM tasks WHERE id = ?;";
+    const char *sql = "SELECT id, title, description, type, priority, status, "
+                      "       scope, due_date, created_at, updated_at "
+                      "FROM tasks WHERE id = ?;";
 
     sqlite3_stmt *stmt = NULL;
     int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
@@ -194,9 +192,8 @@ todoc_err_t db_task_get(int64_t id, task_t *out_task)
 
 todoc_err_t db_task_update(const task_t *task)
 {
-    const char *sql =
-        "UPDATE tasks SET title=?, description=?, type=?, priority=?, "
-        "status=?, scope=?, due_date=? WHERE id=?;";
+    const char *sql = "UPDATE tasks SET title=?, description=?, type=?, priority=?, "
+                      "status=?, scope=?, due_date=? WHERE id=?;";
 
     sqlite3_stmt *stmt = NULL;
     int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
@@ -274,42 +271,41 @@ todoc_err_t db_task_list(const task_filter_t *filter, task_t **out_tasks, int *o
     /* Build query dynamically based on filters */
     char sql[512];
     int sql_len = snprintf(sql, sizeof(sql),
-        "SELECT id, title, description, type, priority, status, "
-        "       scope, due_date, created_at, updated_at "
-        "FROM tasks");
+                           "SELECT id, title, description, type, priority, status, "
+                           "       scope, due_date, created_at, updated_at "
+                           "FROM tasks");
 
     /* Collect WHERE clauses */
     int has_where = 0;
     int param_idx = 0;
 
     /* We'll bind parameters after preparation, track what to bind */
-    int bind_status   = 0;
+    int bind_status = 0;
     int bind_priority = 0;
-    int bind_type     = 0;
-    int bind_scope    = 0;
+    int bind_type = 0;
+    int bind_scope = 0;
 
     if (filter) {
         if (filter->status) {
-            sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len,
-                                " WHERE status = ?");
+            sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len, " WHERE status = ?");
             has_where = 1;
             bind_status = ++param_idx;
         }
         if (filter->priority) {
-            sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len,
-                                "%s priority = ?", has_where ? " AND" : " WHERE");
+            sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len, "%s priority = ?",
+                                has_where ? " AND" : " WHERE");
             has_where = 1;
             bind_priority = ++param_idx;
         }
         if (filter->type) {
-            sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len,
-                                "%s type = ?", has_where ? " AND" : " WHERE");
+            sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len, "%s type = ?",
+                                has_where ? " AND" : " WHERE");
             has_where = 1;
             bind_type = ++param_idx;
         }
         if (filter->scope) {
-            sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len,
-                                "%s scope = ?", has_where ? " AND" : " WHERE");
+            sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len, "%s scope = ?",
+                                has_where ? " AND" : " WHERE");
             has_where = 1;
             bind_scope = ++param_idx;
         }
@@ -320,8 +316,8 @@ todoc_err_t db_task_list(const task_filter_t *filter, task_t **out_tasks, int *o
                         " ORDER BY priority ASC, created_at DESC");
 
     if (filter && filter->limit > 0) {
-        sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len,
-                            " LIMIT %d", filter->limit);
+        sql_len +=
+            snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len, " LIMIT %d", filter->limit);
     }
 
     snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len, ";");
@@ -473,11 +469,10 @@ todoc_err_t db_task_stats(task_stats_t *out_stats)
     sqlite3_finalize(stmt);
 
     /* Overdue (status not done/cancelled, due_date < today) */
-    const char *sql_overdue =
-        "SELECT COUNT(*) FROM tasks "
-        "WHERE due_date IS NOT NULL "
-        "  AND due_date < date('now','localtime') "
-        "  AND status NOT IN (?, ?);";
+    const char *sql_overdue = "SELECT COUNT(*) FROM tasks "
+                              "WHERE due_date IS NOT NULL "
+                              "  AND due_date < date('now','localtime') "
+                              "  AND status NOT IN (?, ?);";
     rc = sqlite3_prepare_v2(g_db, sql_overdue, -1, &stmt, NULL);
     if (rc != SQLITE_OK) {
         return TODOC_ERR_DB;

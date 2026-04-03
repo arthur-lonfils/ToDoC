@@ -195,6 +195,17 @@ assert_output  "stats shows total"       "Total tasks: 3"   stats
 assert_output  "stats shows status"      "in-progress"      stats
 echo ""
 
+# ── 8b. Export ──────────────────────────────────────────────────
+
+echo "Export:"
+assert_output  "export csv header"       "id,title,description"  export
+assert_output  "export csv has data"     "Buy oat milk"          export
+assert_output  "export json format"      "\"id\":"               export --format json
+assert_output  "export json has data"    "Buy oat milk"          export --format json
+assert_output  "export csv filtered"     "in-progress"           export --status in-progress
+assert_fail    "export bad format fails"                         export --format xml
+echo ""
+
 # ── 9. Help / Version ───────���───────────────────────────────────
 
 echo "Help & Version:"

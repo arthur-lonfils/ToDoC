@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Only run on merge commits (PRs merged) or direct pushes with feat/fix commits
+    if: |
+      contains(github.event.head_commit.message, 'feat') ||
+      contains(github.event.head_commit.message, 'fix') ||
+      contains(github.event.head_commit.message, 'perf')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlite3-dev
+
+      - name: Install git-cliff
+        run: |
+          curl -sSfL https://github.com/orhun/git-cliff/releases/latest/download/git-cliff-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          sudo mv git-cliff /usr/local/bin/
+
+      - name: Get current version
+        id: current
+        run: echo "version=$(cat .version | tr -d '[:space:]')" >> $GITHUB_OUTPUT
+
+      - name: Determine new version
+        id: bump
+        run: |
+          NEW_VERSION=$(git-cliff --bumped-version 2>/dev/null | sed 's/^v//')
+          CURRENT_VERSION=$(cat .version | tr -d '[:space:]')
+          if [ -z "$NEW_VERSION" ] || [ "$NEW_VERSION" = "$CURRENT_VERSION" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "No version bump needed."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "Bumping to v$NEW_VERSION"
+          fi
+
+      - name: Update version and changelog
+        if: steps.bump.outputs.skip == 'false'
+        run: |
+          NEW_VERSION="${{ steps.bump.outputs.version }}"
+
+          # Update .version
+          printf "%s\n" "$NEW_VERSION" > .version
+
+          # Update version in source
+          sed -i "s/#define TODOC_VERSION \".*\"/#define TODOC_VERSION \"$NEW_VERSION\"/" src/cli.c
+
+          # Generate changelog
+          git-cliff --tag "v$NEW_VERSION" --output CHANGELOG.md
+
+      - name: Build and test
+        if: steps.bump.outputs.skip == 'false'
+        run: |
+          make
+          make test
+
+      - name: Commit, tag, and push
+        if: steps.bump.outputs.skip == 'false'
+        run: |
+          NEW_VERSION="${{ steps.bump.outputs.version }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add .version src/cli.c CHANGELOG.md
+          git commit -m "chore: release v$NEW_VERSION [skip ci]"
+          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+          git push origin main --tags
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_VERSION="${{ steps.bump.outputs.version }}"
+
+          # Extract this version's changelog section
+          NOTES=$(git-cliff --latest --strip header 2>/dev/null || echo "Release v$NEW_VERSION")
+
+          gh release create "v$NEW_VERSION" \
+            --title "v$NEW_VERSION" \
+            --notes "$NOTES"

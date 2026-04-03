@@ -1,6 +1,7 @@
 #include "commands.h"
 #include "db.h"
 #include "display.h"
+#include "export.h"
 #include "util.h"
 
 #include <stdlib.h>
@@ -41,13 +42,13 @@ todoc_err_t cmd_add(const cli_args_t *args)
     }
 
     task_t task = {0};
-    task.title       = args->title;   /* borrowed, not freed by task_free here */
+    task.title = args->title; /* borrowed, not freed by task_free here */
     task.description = args->description;
-    task.type        = args->type     ? *args->type     : TASK_TYPE_FEATURE;
-    task.priority    = args->priority ? *args->priority : PRIORITY_MEDIUM;
-    task.status      = STATUS_TODO;
-    task.scope       = args->scope;
-    task.due_date    = args->due_date;
+    task.type = args->type ? *args->type : TASK_TYPE_FEATURE;
+    task.priority = args->priority ? *args->priority : PRIORITY_MEDIUM;
+    task.status = STATUS_TODO;
+    task.scope = args->scope;
+    task.due_date = args->due_date;
 
     int64_t new_id = 0;
     todoc_err_t err = db_task_insert(&task, &new_id);
@@ -232,5 +233,32 @@ todoc_err_t cmd_stats(const cli_args_t *args)
     }
 
     display_stats(&stats);
+    return TODOC_OK;
+}
+
+/* ── export ──────────────────────────────────────────────────── */
+
+todoc_err_t cmd_export(const cli_args_t *args)
+{
+    task_t *tasks = NULL;
+    int count = 0;
+
+    todoc_err_t err = db_task_list(&args->filter, &tasks, &count);
+    if (err != TODOC_OK) {
+        display_error("Failed to list tasks: %s", db_last_error());
+        return err;
+    }
+
+    switch (args->export_format) {
+    case EXPORT_JSON:
+        export_tasks_json(tasks, count);
+        break;
+    case EXPORT_CSV:
+    default:
+        export_tasks_csv(tasks, count);
+        break;
+    }
+
+    db_task_list_free(tasks, count);
     return TODOC_OK;
 }

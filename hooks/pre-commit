@@ -1,0 +1,42 @@
+#!/bin/sh
+# Pre-commit hook: checks formatting of staged C files.
+# Installed by `make setup`.
+
+set -e
+
+# Get staged .c and .h files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(c|h)$' || true)
+
+if [ -z "$STAGED_FILES" ]; then
+    exit 0
+fi
+
+# Check if clang-format is available
+if ! command -v clang-format > /dev/null 2>&1; then
+    echo "WARNING: clang-format not found, skipping format check."
+    echo "  Install with: sudo apt install clang-format"
+    exit 0
+fi
+
+# Check formatting
+UNFORMATTED=""
+for file in $STAGED_FILES; do
+    if [ -f "$file" ]; then
+        if ! clang-format --dry-run --Werror "$file" > /dev/null 2>&1; then
+            UNFORMATTED="$UNFORMATTED $file"
+        fi
+    fi
+done
+
+if [ -n "$UNFORMATTED" ]; then
+    echo ""
+    echo "ERROR: The following files are not formatted correctly:"
+    echo ""
+    for file in $UNFORMATTED; do
+        echo "  $file"
+    done
+    echo ""
+    echo "Run 'make format' to fix, then re-stage."
+    echo ""
+    exit 1
+fi
