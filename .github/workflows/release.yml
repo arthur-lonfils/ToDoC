@@ -33,10 +33,9 @@ jobs:
           sudo apt-get install -y libsqlite3-dev
 
       - name: Install git-cliff
-        run: |
-          GC_VERSION=$(curl -sL https://api.github.com/repos/orhun/git-cliff/releases/latest | grep -oP '"tag_name": "\K[^"]+')
-          curl -sSfL "https://github.com/orhun/git-cliff/releases/download/${GC_VERSION}/git-cliff-${GC_VERSION#v}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
-          sudo mv git-cliff /usr/local/bin/
+        uses: orhun/git-cliff-action@v4
+        with:
+          args: --version
 
       - name: Extract version from branch name
         id: version
@@ -109,10 +108,9 @@ jobs:
           sudo apt-get install -y libsqlite3-dev
 
       - name: Install git-cliff
-        run: |
-          GC_VERSION=$(curl -sL https://api.github.com/repos/orhun/git-cliff/releases/latest | grep -oP '"tag_name": "\K[^"]+')
-          curl -sSfL "https://github.com/orhun/git-cliff/releases/download/${GC_VERSION}/git-cliff-${GC_VERSION#v}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
-          sudo mv git-cliff /usr/local/bin/
+        uses: orhun/git-cliff-action@v4
+        with:
+          args: --version
 
       - name: Extract version
         id: version
