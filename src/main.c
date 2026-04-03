@@ -24,7 +24,7 @@ int main(int argc, char **argv)
         return 0;
     }
     if (args.command == CMD_VERSION) {
-        printf("todoc 0.1.0\n");
+        printf("todoc %s\n", TODOC_VERSION);
         cli_args_free(&args);
         return 0;
     }

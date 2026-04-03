@@ -212,8 +212,8 @@ echo "Help & Version:"
 assert_output  "help shows usage"        "Usage:"           help
 assert_output  "--help works"            "Usage:"           --help
 assert_output  "-h works"                "Usage:"           -h
-assert_output  "version shows number"    "0.1.0"            version
-assert_output  "--version works"         "0.1.0"            --version
+assert_output  "version shows number"    "0.3.0"            version
+assert_output  "--version works"         "0.3.0"            --version
 echo ""
 
 # ── 10. Error handling ──────────────────────────────────────────

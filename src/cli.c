@@ -5,10 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* ── Version ─────────────────────────────────────────────────── */
-
-#define TODOC_VERSION "0.2.0"
-
 /* ── Subcommand lookup ───────────────────────────────────────── */
 
 typedef struct {

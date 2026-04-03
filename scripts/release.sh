@@ -85,12 +85,12 @@ fi
 info "Updating .version..."
 printf "%s\n" "$NEW_VERSION" > .version
 
-info "Updating src/cli.c..."
-sed -i "s/#define TODOC_VERSION \".*\"/#define TODOC_VERSION \"$NEW_VERSION\"/" src/cli.c
+info "Updating src/cli.h..."
+sed -i "s/#define TODOC_VERSION \".*\"/#define TODOC_VERSION \"$NEW_VERSION\"/" src/cli.h
 
 # Verify substitution worked
-if ! grep -q "\"$NEW_VERSION\"" src/cli.c; then
-    error "Failed to update TODOC_VERSION in src/cli.c"
+if ! grep -q "\"$NEW_VERSION\"" src/cli.h; then
+    error "Failed to update TODOC_VERSION in src/cli.h"
 fi
 
 # ── Generate changelog ───────────────────────────────────────────
@@ -117,7 +117,7 @@ info "Binary version verified: v$NEW_VERSION"
 # ── Commit, tag, push ───────────────────────────────────────────
 
 info "Committing..."
-git add .version src/cli.c CHANGELOG.md
+git add .version src/cli.h CHANGELOG.md
 git commit -m "chore: release v$NEW_VERSION"
 
 info "Tagging v$NEW_VERSION..."
