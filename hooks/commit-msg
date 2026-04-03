@@ -1,0 +1,58 @@
+#!/bin/sh
+# Validates commit messages follow Conventional Commits format.
+# Installed by `make setup`.
+#
+# Format: {type}({scope}): {description}
+#   type  — required: feat, fix, refactor, perf, test, chore, docs, ci, build
+#   scope — optional: db, cli, model, display, export, migrate, util, deps
+#   description — required, lowercase start, no period, max 72 chars header
+
+set -e
+
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG=$(head -1 "$COMMIT_MSG_FILE")
+
+# Allow merge commits and fixup/squash commits
+if echo "$COMMIT_MSG" | grep -qE "^(Merge|Revert|fixup!|squash!) "; then
+    exit 0
+fi
+
+# Allowed types
+TYPES="feat|fix|refactor|perf|test|chore|docs|ci|build"
+
+# Allowed scopes (optional)
+SCOPES="db|cli|model|display|export|migrate|util|deps"
+
+# Pattern: type(scope): description  OR  type: description
+PATTERN="^($TYPES)(\(($SCOPES)\))?!?: .{1,}"
+
+if ! echo "$COMMIT_MSG" | grep -qE "$PATTERN"; then
+    echo ""
+    echo "ERROR: Invalid commit message format."
+    echo ""
+    echo "  Got:      $COMMIT_MSG"
+    echo ""
+    echo "  Expected: {type}({scope}): {description}"
+    echo ""
+    echo "  Types:  feat, fix, refactor, perf, test, chore, docs, ci, build"
+    echo "  Scopes: db, cli, model, display, export, migrate, util, deps"
+    echo ""
+    echo "  Examples:"
+    echo "    feat(cli): add export command with CSV and JSON output"
+    echo "    fix(db): prevent LIMIT clause from being overwritten"
+    echo "    chore(deps): update sqlite to 3.45"
+    echo "    docs: add CONTRIBUTING.md"
+    echo ""
+    exit 1
+fi
+
+# Check header length (max 72 chars)
+HEADER_LEN=$(echo -n "$COMMIT_MSG" | wc -c)
+if [ "$HEADER_LEN" -gt 72 ]; then
+    echo ""
+    echo "ERROR: Commit header too long ($HEADER_LEN chars, max 72)."
+    echo ""
+    echo "  $COMMIT_MSG"
+    echo ""
+    exit 1
+fi

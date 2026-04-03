@@ -24,11 +24,12 @@ SRCS      = $(wildcard $(SRC_DIR)/*.c)
 OBJS      = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 TARGET    = $(BUILD_DIR)/todoc
 
-.PHONY: all clean install uninstall embed test test-valgrind
+.PHONY: all clean install uninstall embed test test-valgrind setup format format-check quality release
 
 all: $(TARGET)
 
-# Generate migrations.c from sql files before compiling
+# ── Build ────────────────────────────────────────────────────────
+
 embed: $(MIGRATIONS_SRC)
 
 $(MIGRATIONS_SRC): $(wildcard $(SQL_DIR)/*.sql) $(EMBED_SCRIPT)
@@ -40,7 +41,6 @@ $(TARGET): $(OBJS)
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-# migrations.o depends on the generated file
 $(BUILD_DIR)/migrations.o: $(MIGRATIONS_SRC)
 
 $(BUILD_DIR):
@@ -49,6 +49,8 @@ $(BUILD_DIR):
 clean:
 	rm -rf $(BUILD_DIR)
 
+# ── Install / Uninstall ─────────────────────────────────────────
+
 install: $(TARGET)
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 755 $(TARGET) $(DESTDIR)$(BINDIR)/todoc
@@ -56,8 +58,37 @@ install: $(TARGET)
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/todoc
 
+# ── Dev setup (git hooks) ───────────────────────────────────────
+
+setup:
+	@echo "Installing git hooks..."
+	@cp hooks/commit-msg .git/hooks/commit-msg
+	@cp hooks/pre-commit .git/hooks/pre-commit
+	@chmod +x .git/hooks/commit-msg .git/hooks/pre-commit
+	@echo "Done. Git hooks installed."
+
+# ── Code quality ─────────────────────────────────────────────────
+
+format:
+	@clang-format -i $(SRC_DIR)/*.c $(SRC_DIR)/*.h
+	@echo "Formatted all source files."
+
+format-check:
+	@clang-format --dry-run --Werror $(SRC_DIR)/*.c $(SRC_DIR)/*.h
+	@echo "All files correctly formatted."
+
+quality: format-check
+	@echo "Quality checks passed."
+
+# ── Testing ──────────────────────────────────────────────────────
+
 test: $(TARGET)
 	./tests/run.sh
 
 test-valgrind: $(TARGET)
 	./tests/run.sh --valgrind
+
+# ── Release ──────────────────────────────────────────────────────
+
+release:
+	./scripts/release.sh
