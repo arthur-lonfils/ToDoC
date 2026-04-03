@@ -31,11 +31,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libsqlite3-dev
-
-      - name: Install git-cliff
-        uses: orhun/git-cliff-action@v4
-        with:
-          args: --version
+          pip install git-cliff
 
       - name: Extract version from branch name
         id: version
@@ -106,11 +102,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libsqlite3-dev
-
-      - name: Install git-cliff
-        uses: orhun/git-cliff-action@v4
-        with:
-          args: --version
+          pip install git-cliff
 
       - name: Extract version
         id: version
