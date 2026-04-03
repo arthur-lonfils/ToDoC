@@ -1,0 +1,158 @@
+#include "util.h"
+
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <time.h>
+
+char *todoc_strdup(const char *s)
+{
+    if (!s) {
+        return NULL;
+    }
+    char *dup = strdup(s);
+    if (!dup) {
+        fprintf(stderr, "todoc: out of memory\n");
+        exit(1);
+    }
+    return dup;
+}
+
+char *todoc_dir_path(void)
+{
+    const char *home = getenv("HOME");
+    if (!home) {
+        fprintf(stderr, "todoc: HOME environment variable not set\n");
+        return NULL;
+    }
+
+    size_t len = strlen(home) + strlen("/.todoc") + 1;
+    char *path = todoc_malloc(len);
+    snprintf(path, len, "%s/.todoc", home);
+    return path;
+}
+
+char *todoc_db_path(void)
+{
+    const char *home = getenv("HOME");
+    if (!home) {
+        fprintf(stderr, "todoc: HOME environment variable not set\n");
+        return NULL;
+    }
+
+    size_t len = strlen(home) + strlen("/.todoc/todoc.db") + 1;
+    char *path = todoc_malloc(len);
+    snprintf(path, len, "%s/.todoc/todoc.db", home);
+    return path;
+}
+
+int todoc_ensure_dir(const char *path)
+{
+    struct stat st;
+    if (stat(path, &st) == 0) {
+        if (S_ISDIR(st.st_mode)) {
+            return 0;
+        }
+        fprintf(stderr, "todoc: '%s' exists but is not a directory\n", path);
+        return -1;
+    }
+
+    if (mkdir(path, 0755) != 0) {
+        fprintf(stderr, "todoc: cannot create directory '%s': %s\n", path, strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
+int todoc_validate_date(const char *s)
+{
+    if (!s) {
+        return 0;
+    }
+
+    /* Check format: YYYY-MM-DD (exactly 10 chars) */
+    if (strlen(s) != 10) {
+        return 0;
+    }
+    if (s[4] != '-' || s[7] != '-') {
+        return 0;
+    }
+
+    /* Check all other chars are digits */
+    for (int i = 0; i < 10; i++) {
+        if (i == 4 || i == 7) {
+            continue;
+        }
+        if (s[i] < '0' || s[i] > '9') {
+            return 0;
+        }
+    }
+
+    /* Parse and validate ranges */
+    struct tm tm_val = {0};
+    int year  = atoi(s);
+    int month = atoi(s + 5);
+    int day   = atoi(s + 8);
+
+    if (year < 1970 || year > 2100) {
+        return 0;
+    }
+    if (month < 1 || month > 12) {
+        return 0;
+    }
+    if (day < 1 || day > 31) {
+        return 0;
+    }
+
+    /* Use mktime to validate the actual date (e.g., Feb 30 is invalid) */
+    tm_val.tm_year = year - 1900;
+    tm_val.tm_mon  = month - 1;
+    tm_val.tm_mday = day;
+    tm_val.tm_isdst = -1;
+
+    struct tm check = tm_val;
+    if (mktime(&check) == (time_t)-1) {
+        return 0;
+    }
+
+    /* mktime normalizes invalid dates (e.g., Jan 32 -> Feb 1) */
+    if (check.tm_year != tm_val.tm_year ||
+        check.tm_mon  != tm_val.tm_mon  ||
+        check.tm_mday != tm_val.tm_mday) {
+        return 0;
+    }
+
+    return 1;
+}
+
+void *todoc_malloc(size_t size)
+{
+    void *ptr = malloc(size);
+    if (!ptr && size > 0) {
+        fprintf(stderr, "todoc: out of memory\n");
+        exit(1);
+    }
+    return ptr;
+}
+
+void *todoc_calloc(size_t count, size_t size)
+{
+    void *ptr = calloc(count, size);
+    if (!ptr && count > 0 && size > 0) {
+        fprintf(stderr, "todoc: out of memory\n");
+        exit(1);
+    }
+    return ptr;
+}
+
+void *todoc_realloc(void *ptr, size_t size)
+{
+    void *new_ptr = realloc(ptr, size);
+    if (!new_ptr && size > 0) {
+        fprintf(stderr, "todoc: out of memory\n");
+        exit(1);
+    }
+    return new_ptr;
+}
