@@ -94,10 +94,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 
 ## Branch Conventions
 
-| Prefix              | Purpose                                     |
-|---------------------|---------------------------------------------|
-| `story/<desc>`      | Features, refactors, improvements, tests, docs |
-| `defect/<desc>`     | Bug fixes, security patches                 |
+| Prefix              | Target | Purpose                                     |
+|---------------------|--------|---------------------------------------------|
+| `story/<desc>`      | `main` | Features, refactors, improvements, tests, docs |
+| `defect/<desc>`     | `main` | Bug fixes, security patches                 |
+| `release/vX.Y.Z`   | `main` | Version release (CI auto-generates changelog) |
 
 All branches target `main` via pull request with squash merge.
 

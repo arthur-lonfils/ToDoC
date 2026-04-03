@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install dependencies
         run: |
@@ -38,14 +38,15 @@ jobs:
       - name: Validate branch name
         run: |
           BRANCH="${{ github.head_ref }}"
-          PATTERN="^(story|defect)/[a-z0-9][a-z0-9-]+$"
+          PATTERN="^(story|defect|release)/[a-z0-9][a-z0-9v.-]+$"
 
           if ! echo "$BRANCH" | grep -qE "$PATTERN"; then
             echo "ERROR: Invalid branch name: '$BRANCH'"
             echo ""
             echo "Expected format:"
-            echo "  story/<description>   — features, refactors, docs, tests"
-            echo "  defect/<description>  — bug fixes, security patches"
+            echo "  story/<description>     — features, refactors, docs, tests"
+            echo "  defect/<description>    — bug fixes, security patches"
+            echo "  release/v<X.Y.Z>        — version release"
             echo ""
             echo "Use lowercase with hyphens (e.g., story/add-export-json)"
             exit 1
@@ -58,7 +59,7 @@ jobs:
     if: github.event_name == 'pull_request'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
