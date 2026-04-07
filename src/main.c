@@ -2,6 +2,7 @@
 #include "commands.h"
 #include "db.h"
 #include "display.h"
+#include "update_check.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +17,11 @@ int main(int argc, char **argv)
         cli_args_free(&args);
         return 1;
     }
+
+    /* Kick off the background update-check refresh as early as possible
+     * so the child has the most time to finish before the user runs
+     * todoc again. No-op for noisy commands or when disabled. */
+    update_check_refresh_async(args.command);
 
     /* Handle commands that don't need the database */
     if (args.command == CMD_HELP) {
@@ -95,6 +101,9 @@ int main(int argc, char **argv)
     }
 
     db_close();
+    /* Show the (possibly stale) cached update warning at the very end,
+     * after the command's own output, so it never interrupts the result. */
+    update_check_show_warning(args.command);
     cli_args_free(&args);
     return (err == TODOC_OK) ? 0 : 1;
 }

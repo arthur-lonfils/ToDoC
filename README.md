@@ -21,6 +21,9 @@ A fast, full-featured command-line task manager written in C. SQLite-backed with
   alongside the existing single-string `scope` field
 - **Embedded changelog** — `todoc changelog` shows release notes from
   inside the binary, no network needed
+- **Update check** — quietly notices when a new release is available
+  and warns once at the end of any command, with a louder message for
+  major or breaking releases
 - Filtered views by any attribute combination
 - Export to CSV or JSON
 - Color-coded terminal output (respects `NO_COLOR`)
@@ -90,6 +93,15 @@ todoc changelog --list           # just version names + dates
 
 The full `CHANGELOG.md` is embedded in the binary at build time, so
 this works fully offline — no network round-trip to GitHub.
+
+todoc also checks for new releases in the background once per day and
+prints a one-line warning at the end of the next command. Major or
+breaking releases get a louder warning that points at
+`todoc changelog --since <your-version>`. To opt out:
+
+```bash
+export TODOC_NO_UPDATE_CHECK=1
+```
 
 ### Build from source
 
