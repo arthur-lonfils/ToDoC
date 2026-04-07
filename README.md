@@ -19,6 +19,8 @@ A fast, full-featured command-line task manager written in C. SQLite-backed with
   (parents move with all their children)
 - **Labels** — many-to-many free-form tags, auto-created on first use,
   alongside the existing single-string `scope` field
+- **Embedded changelog** — `todoc changelog` shows release notes from
+  inside the binary, no network needed
 - Filtered views by any attribute combination
 - Export to CSV or JSON
 - Color-coded terminal output (respects `NO_COLOR`)
@@ -75,6 +77,19 @@ curl -sSL https://raw.githubusercontent.com/arthur-lonfils/ToDoC/main/scripts/in
 
 For a system-wide update, prepend `sudo` and `PREFIX=/usr/local`
 the same way as the install command above.
+
+After an update, see what changed:
+
+```bash
+todoc changelog                  # latest release notes
+todoc changelog 0.4.0            # one specific release (also accepts v0.4.0)
+todoc changelog --since 0.3.0    # everything since you last upgraded
+todoc changelog --all            # full history
+todoc changelog --list           # just version names + dates
+```
+
+The full `CHANGELOG.md` is embedded in the binary at build time, so
+this works fully offline — no network round-trip to GitHub.
 
 ### Build from source
 

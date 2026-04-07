@@ -44,6 +44,13 @@ int main(int argc, char **argv)
         return (err == TODOC_OK) ? 0 : 1;
     }
 
+    /* changelog reads embedded data; no DB needed */
+    if (args.command == CMD_CHANGELOG) {
+        err = cmd_changelog(&args);
+        cli_args_free(&args);
+        return (err == TODOC_OK) ? 0 : 1;
+    }
+
     /* All other commands need the database open */
     if (db_open() != TODOC_OK) {
         display_error("Failed to open database: %s", db_last_error());
