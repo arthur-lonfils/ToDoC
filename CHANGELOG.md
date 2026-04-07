@@ -4,6 +4,13 @@ All notable changes to **todoc** are documented here.
 
 Format based on [Conventional Commits](https://conventionalcommits.org).
 
+## [0.6.0] — 2026-04-07
+
+### Features
+
+- **cli:** Add 'todoc changelog' with embedded release notes(80262c4)
+- **cli:** Add background update-check warning(55d7210)
+
 ## [0.5.0] — 2026-04-07
 
 ### Documentation
