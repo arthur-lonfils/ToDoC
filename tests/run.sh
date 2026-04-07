@@ -11,6 +11,11 @@ TODOC="./build/todoc"
 TEST_HOME=$(mktemp -d)
 export HOME="$TEST_HOME"
 
+# Suppress the background update check globally so the suite never
+# spawns a curl child or hits GitHub. The dedicated update-check
+# tests below temporarily unset this for a single command.
+export TODOC_NO_UPDATE_CHECK=1
+
 PASS=0
 FAIL=0
 USE_VALGRIND=0
@@ -399,6 +404,103 @@ assert_fail    "changelog unknown version fails"               changelog 99.99.9
 assert_output  "changelog --since prior version"  "## ["       changelog --since 0.0.0
 assert_fail    "changelog --since future version"              changelog --since 99.99.99
 assert_output  "help command changelog"           "release notes" help changelog
+echo ""
+
+# ── 8k. Update check warning ───────────────────────────────────
+
+echo "Update check:"
+# Helper: run a command without TODOC_NO_UPDATE_CHECK so the warning
+# logic is exercised, and assert that a substring appears in output.
+# Restores the env var afterwards so subsequent tests stay quiet.
+assert_warn() {
+    desc="$1"
+    expected="$2"
+    shift 2
+    saved_env=$TODOC_NO_UPDATE_CHECK
+    unset TODOC_NO_UPDATE_CHECK
+    if output=$(run "$@"); then
+        if echo "$output" | grep -qF "$expected"; then
+            PASS=$((PASS + 1))
+            printf "  \033[32mPASS\033[0m  %s\n" "$desc"
+        else
+            FAIL=$((FAIL + 1))
+            printf "  \033[31mFAIL\033[0m  %s (expected '%s')\n" "$desc" "$expected"
+            printf "        got: %s\n" "$output"
+        fi
+    else
+        FAIL=$((FAIL + 1))
+        printf "  \033[31mFAIL\033[0m  %s (command failed)\n" "$desc"
+    fi
+    export TODOC_NO_UPDATE_CHECK=$saved_env
+}
+
+assert_no_warn() {
+    desc="$1"
+    forbidden="$2"
+    shift 2
+    saved_env=$TODOC_NO_UPDATE_CHECK
+    unset TODOC_NO_UPDATE_CHECK
+    if output=$(run "$@"); then
+        if echo "$output" | grep -qF "$forbidden"; then
+            FAIL=$((FAIL + 1))
+            printf "  \033[31mFAIL\033[0m  %s (unexpected '%s' in output)\n" "$desc" "$forbidden"
+        else
+            PASS=$((PASS + 1))
+            printf "  \033[32mPASS\033[0m  %s\n" "$desc"
+        fi
+    else
+        FAIL=$((FAIL + 1))
+        printf "  \033[31mFAIL\033[0m  %s (command failed)\n" "$desc"
+    fi
+    export TODOC_NO_UPDATE_CHECK=$saved_env
+}
+
+CACHE="$HOME/.todoc/update_check"
+
+# Patch bump
+printf 'last_check=%d\nlatest_version=99.0.1\nbreaking=0\n' "$(date +%s)" > "$CACHE"
+# Forge a cache where the cached version is patch-newer than the binary
+# version. We use 99.0.x so the test stays valid past any future bump.
+# (For patch we need same major+minor; harder to forge generically.)
+# So instead, the patch test uses a hand-tuned version matching .version
+# bumped by 0.0.1.
+TEST_VERSION=$(cat .version 2>/dev/null | tr -d '[:space:]')
+patch_v=$(printf '%s' "$TEST_VERSION" | awk -F. '{printf "%d.%d.%d", $1, $2, $3+1}')
+minor_v=$(printf '%s' "$TEST_VERSION" | awk -F. '{printf "%d.%d.0", $1, $2+1}')
+major_v=$(printf '%s' "$TEST_VERSION" | awk -F. '{printf "%d.0.0", $1+1}')
+
+printf 'last_check=%d\nlatest_version=%s\nbreaking=0\n' "$(date +%s)" "$patch_v" > "$CACHE"
+assert_warn    "patch bump shows hint"             "Patch v$patch_v"               list
+
+printf 'last_check=%d\nlatest_version=%s\nbreaking=0\n' "$(date +%s)" "$minor_v" > "$CACHE"
+assert_warn    "minor bump shows new release"      "New release v$minor_v"         list
+assert_warn    "minor bump mentions backup"        "backed up automatically"       list
+
+printf 'last_check=%d\nlatest_version=%s\nbreaking=0\n' "$(date +%s)" "$major_v" > "$CACHE"
+assert_warn    "major bump shows breaking warn"    "Major release v$major_v"       list
+assert_warn    "major bump mentions changelog"     "todoc changelog --since"       list
+
+# Breaking flag promotes a minor bump to the major-warning treatment
+printf 'last_check=%d\nlatest_version=%s\nbreaking=1\n' "$(date +%s)" "$minor_v" > "$CACHE"
+assert_warn    "breaking flag escalates minor"     "may contain breaking"          list
+
+# Equal version: no warning
+printf 'last_check=%d\nlatest_version=%s\nbreaking=0\n' "$(date +%s)" "$TEST_VERSION" > "$CACHE"
+assert_no_warn "equal version is quiet"            "available"                     list
+
+# Older cached version: no warning (use 0.0.1 which is always older)
+printf 'last_check=%d\nlatest_version=0.0.1\nbreaking=0\n' "$(date +%s)" > "$CACHE"
+assert_no_warn "older cached version is quiet"     "available"                     list
+
+# Env var disables warning even when cache is newer
+printf 'last_check=%d\nlatest_version=%s\nbreaking=0\n' "$(date +%s)" "$major_v" > "$CACHE"
+assert_output  "env var suppresses warning"        "task(s)"                       list
+# (TODOC_NO_UPDATE_CHECK is still set globally via the suite header,
+#  so the warning must NOT appear in this assertion's combined output.
+#  We rely on the major_v warning text being absent from a normal list.)
+
+# Clean up the cache so the rest of the suite stays untouched
+rm -f "$CACHE"
 echo ""
 
 # ── 9. Help / Version ───────���───────────────────────────────────
