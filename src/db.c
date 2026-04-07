@@ -284,19 +284,20 @@ todoc_err_t db_task_list(const task_filter_t *filter, task_t **out_tasks, int *o
     char sql[1024];
     int sql_len = 0;
 
-    /* Always use alias for tasks; add JOIN when project filter is active */
+    sql_len = snprintf(sql, sizeof(sql),
+                       "SELECT t.id, t.title, t.description, t.type, t.priority, t.status, "
+                       "       t.scope, t.due_date, t.created_at, t.updated_at, t.parent_id "
+                       "FROM tasks t");
+
     if (filter && filter->project) {
-        sql_len = snprintf(sql, sizeof(sql),
-                           "SELECT t.id, t.title, t.description, t.type, t.priority, t.status, "
-                           "       t.scope, t.due_date, t.created_at, t.updated_at, t.parent_id "
-                           "FROM tasks t "
-                           "INNER JOIN task_projects tp ON t.id = tp.task_id "
-                           "INNER JOIN projects p ON tp.project_id = p.id");
-    } else {
-        sql_len = snprintf(sql, sizeof(sql),
-                           "SELECT t.id, t.title, t.description, t.type, t.priority, t.status, "
-                           "       t.scope, t.due_date, t.created_at, t.updated_at, t.parent_id "
-                           "FROM tasks t");
+        sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len,
+                            " INNER JOIN task_projects tp ON t.id = tp.task_id"
+                            " INNER JOIN projects p ON tp.project_id = p.id");
+    }
+    if (filter && filter->label) {
+        sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len,
+                            " INNER JOIN task_labels tl ON t.id = tl.task_id"
+                            " INNER JOIN labels lbl ON tl.label_id = lbl.id");
     }
 
     /* Collect WHERE clauses */
@@ -304,6 +305,7 @@ todoc_err_t db_task_list(const task_filter_t *filter, task_t **out_tasks, int *o
     int param_idx = 0;
 
     int bind_project = 0;
+    int bind_label = 0;
     int bind_status = 0;
     int bind_priority = 0;
     int bind_type = 0;
@@ -314,6 +316,12 @@ todoc_err_t db_task_list(const task_filter_t *filter, task_t **out_tasks, int *o
             sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len, " WHERE p.name = ?");
             has_where = 1;
             bind_project = ++param_idx;
+        }
+        if (filter->label) {
+            sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len, "%s lbl.name = ?",
+                                has_where ? " AND" : " WHERE");
+            has_where = 1;
+            bind_label = ++param_idx;
         }
         if (filter->status) {
             sql_len += snprintf(sql + sql_len, sizeof(sql) - (size_t)sql_len, "%s t.status = ?",
@@ -361,6 +369,9 @@ todoc_err_t db_task_list(const task_filter_t *filter, task_t **out_tasks, int *o
     /* Bind filter parameters */
     if (bind_project) {
         sqlite3_bind_text(stmt, bind_project, filter->project, -1, SQLITE_STATIC);
+    }
+    if (bind_label) {
+        sqlite3_bind_text(stmt, bind_label, filter->label, -1, SQLITE_STATIC);
     }
     if (bind_status) {
         sqlite3_bind_int(stmt, bind_status, (int)*filter->status);
@@ -1046,5 +1057,245 @@ todoc_err_t db_task_unassign_project(int64_t task_id, int64_t project_id)
     if (sqlite3_changes(g_db) == 0) {
         return TODOC_ERR_NOT_FOUND;
     }
+    return TODOC_OK;
+}
+
+/* ── Label CRUD ─────────────────────────────────────────────── */
+
+static void row_to_label(sqlite3_stmt *stmt, label_t *label)
+{
+    label->id = sqlite3_column_int64(stmt, 0);
+    label->name = col_text_dup(stmt, 1);
+    label->color = col_text_dup(stmt, 2);
+    label->created_at = col_text_dup(stmt, 3);
+}
+
+todoc_err_t db_label_insert(const label_t *label, int64_t *out_id)
+{
+    const char *sql = "INSERT INTO labels (name, color) VALUES (?, ?);";
+
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        return TODOC_ERR_DB;
+    }
+    sqlite3_bind_text(stmt, 1, label->name, -1, SQLITE_STATIC);
+    if (label->color) {
+        sqlite3_bind_text(stmt, 2, label->color, -1, SQLITE_STATIC);
+    } else {
+        sqlite3_bind_null(stmt, 2);
+    }
+
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    if (rc != SQLITE_DONE) {
+        /* UNIQUE constraint failure */
+        return TODOC_ERR_INVALID;
+    }
+    if (out_id) {
+        *out_id = sqlite3_last_insert_rowid(g_db);
+    }
+    return TODOC_OK;
+}
+
+todoc_err_t db_label_get_by_name(const char *name, label_t *out_label)
+{
+    const char *sql = "SELECT id, name, color, created_at FROM labels WHERE name = ?;";
+
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        return TODOC_ERR_DB;
+    }
+    sqlite3_bind_text(stmt, 1, name, -1, SQLITE_STATIC);
+    rc = sqlite3_step(stmt);
+
+    if (rc == SQLITE_ROW) {
+        memset(out_label, 0, sizeof(*out_label));
+        row_to_label(stmt, out_label);
+        sqlite3_finalize(stmt);
+        return TODOC_OK;
+    }
+
+    sqlite3_finalize(stmt);
+    return rc == SQLITE_DONE ? TODOC_ERR_NOT_FOUND : TODOC_ERR_DB;
+}
+
+todoc_err_t db_label_delete_by_name(const char *name)
+{
+    const char *sql = "DELETE FROM labels WHERE name = ?;";
+
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        return TODOC_ERR_DB;
+    }
+    sqlite3_bind_text(stmt, 1, name, -1, SQLITE_STATIC);
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    if (rc != SQLITE_DONE) {
+        return TODOC_ERR_DB;
+    }
+    if (sqlite3_changes(g_db) == 0) {
+        return TODOC_ERR_NOT_FOUND;
+    }
+    return TODOC_OK;
+}
+
+todoc_err_t db_label_list(label_t **out_labels, int *out_count)
+{
+    *out_labels = NULL;
+    *out_count = 0;
+
+    const char *sql = "SELECT id, name, color, created_at FROM labels ORDER BY name;";
+
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        return TODOC_ERR_DB;
+    }
+
+    int capacity = 8;
+    label_t *labels = todoc_calloc((size_t)capacity, sizeof(label_t));
+    int count = 0;
+
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        if (count >= capacity) {
+            capacity *= 2;
+            labels = todoc_realloc(labels, (size_t)capacity * sizeof(label_t));
+            memset(&labels[count], 0, (size_t)(capacity - count) * sizeof(label_t));
+        }
+        row_to_label(stmt, &labels[count]);
+        count++;
+    }
+    sqlite3_finalize(stmt);
+
+    if (rc != SQLITE_DONE) {
+        db_label_list_free(labels, count);
+        return TODOC_ERR_DB;
+    }
+
+    *out_labels = labels;
+    *out_count = count;
+    return TODOC_OK;
+}
+
+void db_label_list_free(label_t *labels, int count)
+{
+    if (!labels) {
+        return;
+    }
+    for (int i = 0; i < count; i++) {
+        label_free(&labels[i]);
+    }
+    free(labels);
+}
+
+todoc_err_t db_label_ensure(const char *name, int64_t *out_id)
+{
+    label_t existing = {0};
+    todoc_err_t err = db_label_get_by_name(name, &existing);
+    if (err == TODOC_OK) {
+        if (out_id) {
+            *out_id = existing.id;
+        }
+        label_free(&existing);
+        return TODOC_OK;
+    }
+    if (err != TODOC_ERR_NOT_FOUND) {
+        return err;
+    }
+
+    label_t fresh = {0};
+    fresh.name = (char *)name; /* borrowed */
+    return db_label_insert(&fresh, out_id);
+}
+
+/* ── Task-Label junction ────────────────────────────────────── */
+
+todoc_err_t db_task_attach_label(int64_t task_id, int64_t label_id)
+{
+    const char *sql = "INSERT OR IGNORE INTO task_labels (task_id, label_id) VALUES (?, ?);";
+
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        return TODOC_ERR_DB;
+    }
+    sqlite3_bind_int64(stmt, 1, task_id);
+    sqlite3_bind_int64(stmt, 2, label_id);
+
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    return rc == SQLITE_DONE ? TODOC_OK : TODOC_ERR_DB;
+}
+
+todoc_err_t db_task_detach_label(int64_t task_id, int64_t label_id)
+{
+    const char *sql = "DELETE FROM task_labels WHERE task_id = ? AND label_id = ?;";
+
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        return TODOC_ERR_DB;
+    }
+    sqlite3_bind_int64(stmt, 1, task_id);
+    sqlite3_bind_int64(stmt, 2, label_id);
+
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    if (rc != SQLITE_DONE) {
+        return TODOC_ERR_DB;
+    }
+    if (sqlite3_changes(g_db) == 0) {
+        return TODOC_ERR_NOT_FOUND;
+    }
+    return TODOC_OK;
+}
+
+todoc_err_t db_task_get_labels(int64_t task_id, label_t **out_labels, int *out_count)
+{
+    *out_labels = NULL;
+    *out_count = 0;
+
+    const char *sql = "SELECT l.id, l.name, l.color, l.created_at "
+                      "FROM labels l "
+                      "INNER JOIN task_labels tl ON tl.label_id = l.id "
+                      "WHERE tl.task_id = ? "
+                      "ORDER BY l.name;";
+
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        return TODOC_ERR_DB;
+    }
+    sqlite3_bind_int64(stmt, 1, task_id);
+
+    int capacity = 4;
+    label_t *labels = todoc_calloc((size_t)capacity, sizeof(label_t));
+    int count = 0;
+
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        if (count >= capacity) {
+            capacity *= 2;
+            labels = todoc_realloc(labels, (size_t)capacity * sizeof(label_t));
+            memset(&labels[count], 0, (size_t)(capacity - count) * sizeof(label_t));
+        }
+        row_to_label(stmt, &labels[count]);
+        count++;
+    }
+    sqlite3_finalize(stmt);
+
+    if (rc != SQLITE_DONE) {
+        db_label_list_free(labels, count);
+        return TODOC_ERR_DB;
+    }
+
+    *out_labels = labels;
+    *out_count = count;
     return TODOC_OK;
 }

@@ -352,6 +352,39 @@ assert_ok      "move to global"                    move "$MOVABLE" --global
 assert_output  "task no longer in beta"  "No tasks"      list --project beta
 echo ""
 
+# ── 8i. Labels ──────────────────────────────────────────────────
+
+echo "Labels:"
+assert_ok      "add-label explicit"                add-label urgent --color red
+assert_ok      "add-label minimal"                 add-label weekly
+assert_fail    "add-label duplicate fails"         add-label urgent
+assert_fail    "add-label without name fails"      add-label
+assert_output  "list-labels shows entries" "urgent"   list-labels
+assert_output  "list-labels shows count"   "label(s)" list-labels
+
+# Auto-create on first use
+add_capture    "add task with --label csv"         "Labelled task" --type bug --label "blocked,review"
+LABELLED=$LAST_ID
+assert_output  "auto-created label appears" "blocked"  list-labels
+assert_output  "show task lists labels"     "{review}" show "$LABELLED"
+assert_output  "list filtered by label"     "Labelled task" list --label review
+
+# label / unlabel commands
+add_capture    "add task without labels"           "Plain task"
+PLAIN=$LAST_ID
+assert_ok      "attach label to existing task"     label "$PLAIN" backlog
+assert_output  "auto-created via label cmd" "backlog" list-labels
+assert_output  "list by auto-created label" "Plain task" list --label backlog
+assert_ok      "detach label"                      unlabel "$PLAIN" backlog
+assert_fail    "detach already-detached fails"     unlabel "$PLAIN" backlog
+assert_fail    "label nonexistent task fails"      label 999999 foo
+assert_fail    "unlabel nonexistent label fails"   unlabel "$PLAIN" nopelabel
+
+# rm-label
+assert_ok      "rm-label removes label"            rm-label weekly
+assert_fail    "rm-label nonexistent fails"        rm-label weekly
+echo ""
+
 # ── 9. Help / Version ───────���───────────────────────────────────
 
 echo "Help & Version:"

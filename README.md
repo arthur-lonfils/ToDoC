@@ -17,6 +17,8 @@ A fast, full-featured command-line task manager written in C. SQLite-backed with
   display, and an `abandoned` terminal status alongside `cancelled`
 - **`move`** command to swap a task's project assignments in one step
   (parents move with all their children)
+- **Labels** — many-to-many free-form tags, auto-created on first use,
+  alongside the existing single-string `scope` field
 - Filtered views by any attribute combination
 - Export to CSV or JSON
 - Color-coded terminal output (respects `NO_COLOR`)
@@ -209,6 +211,35 @@ todoc move 42 --global         # remove all project links from 42 + children
 ```
 
 Subtasks cannot be moved directly — move the parent instead.
+
+## Labels
+
+Labels are many-to-many cross-cutting tags. Use `scope` for the area
+of the system (one per task) and labels for everything that cuts
+across — `urgent`, `blocked-on-x`, `v2`, `external`, etc. Labels are
+auto-created on first use, so there's no ceremony required.
+
+```bash
+# Create + attach in one step
+todoc add "Fix login" --type bug --label urgent,security
+
+# Or attach to an existing task (auto-creates the label)
+todoc label 12 blocked-on-design
+
+# Filter
+todoc list --label urgent
+
+# Detach
+todoc unlabel 12 blocked-on-design
+
+# Manage labels explicitly (optional)
+todoc add-label v2 --color green
+todoc list-labels
+todoc rm-label v1
+```
+
+`edit` does not accept `--label` (it would force a destructive
+replace) — use `label`/`unlabel` for additive operations.
 
 ## Task Attributes
 

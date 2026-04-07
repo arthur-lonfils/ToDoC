@@ -72,6 +72,11 @@ int main(int argc, char **argv)
         [CMD_ASSIGN] = cmd_assign,
         [CMD_UNASSIGN] = cmd_unassign,
         [CMD_MOVE] = cmd_move,
+        [CMD_ADD_LABEL] = cmd_add_label,
+        [CMD_LIST_LABELS] = cmd_list_labels,
+        [CMD_RM_LABEL] = cmd_rm_label,
+        [CMD_LABEL] = cmd_label,
+        [CMD_UNLABEL] = cmd_unlabel,
     };
 
     cmd_handler_t handler = handlers[args.command];

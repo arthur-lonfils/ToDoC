@@ -458,3 +458,40 @@ void display_info(const char *fmt, ...)
     fprintf(stdout, "\n");
     va_end(args);
 }
+
+/* ── Labels ──────────────────────────────────────────────────── */
+
+void display_label_list(const label_t *labels, int count)
+{
+    if (count == 0) {
+        display_info("No labels found.");
+        return;
+    }
+
+    const char *rst = clr(CLR_RESET);
+    printf("\n  %s%s%-6s %-20s %s%s\n", clr(CLR_BOLD), clr(CLR_DIM), "ID", "NAME", "COLOR", rst);
+    printf("  %s%s%s\n", clr(CLR_DIM), "─────────────────────────────────────────", rst);
+
+    for (int i = 0; i < count; i++) {
+        const label_t *l = &labels[i];
+        printf("  %s#%-4lld%s %s%-20s%s %s%s%s\n", clr(CLR_DIM), (long long)l->id, rst,
+               clr(CLR_MAGENTA), l->name, rst, clr(CLR_DIM), l->color ? l->color : "-", rst);
+    }
+    printf("\n  %s%d label(s)%s\n\n", clr(CLR_DIM), count, rst);
+}
+
+void display_label_inline(const label_t *labels, int count)
+{
+    if (count == 0) {
+        return;
+    }
+    const char *rst = clr(CLR_RESET);
+    printf("  %-12s ", "Labels:");
+    for (int i = 0; i < count; i++) {
+        printf("%s{%s}%s", clr(CLR_MAGENTA), labels[i].name, rst);
+        if (i < count - 1) {
+            printf(" ");
+        }
+    }
+    printf("\n\n");
+}
