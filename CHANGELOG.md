@@ -4,6 +4,16 @@ All notable changes to **todoc** are documented here.
 
 Format based on [Conventional Commits](https://conventionalcommits.org).
 
+## [0.7.0] — 2026-04-07
+
+### Bug Fixes
+
+- **cli:** Close ai-mode straggler holes(6617546)
+
+### Features
+
+- **cli:** Add ai mode (todoc mode ai|user) and --json flag(a4e9149)
+
 ## [0.6.0] — 2026-04-07
 
 ### Features
