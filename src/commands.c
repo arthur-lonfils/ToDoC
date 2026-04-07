@@ -33,6 +33,43 @@ todoc_err_t cmd_init(const cli_args_t *args)
 
 /* ── helpers ─────────────────────────────────────────────────── */
 
+/* Attach a comma-separated list of labels to a task. Each label is
+ * trimmed and auto-created if missing. Returns the number of labels
+ * attached, or -1 on error. */
+static int attach_labels_csv(int64_t task_id, const char *csv)
+{
+    if (!csv || !*csv) {
+        return 0;
+    }
+    char *copy = todoc_strdup(csv);
+    int n = 0;
+    char *save = NULL;
+    for (char *tok = strtok_r(copy, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+        /* trim leading/trailing whitespace */
+        while (*tok == ' ' || *tok == '\t') {
+            tok++;
+        }
+        char *end = tok + strlen(tok);
+        while (end > tok && (end[-1] == ' ' || end[-1] == '\t')) {
+            end--;
+        }
+        *end = '\0';
+        if (*tok == '\0') {
+            continue;
+        }
+        int64_t label_id = 0;
+        if (db_label_ensure(tok, &label_id) != TODOC_OK) {
+            display_warn("Could not create or find label '%s'.", tok);
+            continue;
+        }
+        if (db_task_attach_label(task_id, label_id) == TODOC_OK) {
+            n++;
+        }
+    }
+    free(copy);
+    return n;
+}
+
 /* Validate that <parent_id> exists and is itself a top-level task
  * (we only allow one level of nesting). Sets *out_err with the
  * appropriate code on failure. Returns 0 on success, -1 on failure. */
@@ -105,9 +142,13 @@ todoc_err_t cmd_add(const cli_args_t *args)
         return err;
     }
 
+    /* Attach labels from --label foo,bar (auto-creates) */
+    int n_labels = attach_labels_csv(new_id, args->labels);
+
     /* Auto-assign to project if --project specified or active project is set */
     const char *proj = args->project;
     char *active = NULL;
+    int assigned_project = 0;
     if (!proj) {
         active = todoc_get_active_project();
         proj = active;
@@ -117,20 +158,29 @@ todoc_err_t cmd_add(const cli_args_t *args)
         todoc_err_t perr = db_project_get_by_name(proj, &project);
         if (perr == TODOC_OK) {
             db_task_assign_project(new_id, project.id);
-            display_success("Task #%lld created and assigned to project '%s'.", (long long)new_id,
-                            proj);
+            assigned_project = 1;
             project_free(&project);
-            free(active);
-            return TODOC_OK;
+        } else {
+            if (perr == TODOC_ERR_NOT_FOUND && args->project) {
+                display_warn("Project '%s' not found. Task created but not assigned.", proj);
+            }
+            project_free(&project);
         }
-        if (perr == TODOC_ERR_NOT_FOUND && args->project) {
-            display_warn("Project '%s' not found. Task created but not assigned.", proj);
-        }
-        project_free(&project);
     }
-    free(active);
 
-    display_success("Task #%lld created.", (long long)new_id);
+    if (assigned_project && n_labels > 0) {
+        display_success("Task #%lld created in project '%s' with %d label(s).", (long long)new_id,
+                        proj, n_labels);
+    } else if (assigned_project) {
+        display_success("Task #%lld created and assigned to project '%s'.", (long long)new_id,
+                        proj);
+    } else if (n_labels > 0) {
+        display_success("Task #%lld created with %d label(s).", (long long)new_id, n_labels);
+    } else {
+        display_success("Task #%lld created.", (long long)new_id);
+    }
+
+    free(active);
     return TODOC_OK;
 }
 
@@ -190,6 +240,14 @@ todoc_err_t cmd_show(const cli_args_t *args)
     }
 
     display_task_detail(&task);
+
+    /* Show labels inline */
+    label_t *labels = NULL;
+    int n_labels = 0;
+    if (db_task_get_labels(args->task_id, &labels, &n_labels) == TODOC_OK && n_labels > 0) {
+        display_label_inline(labels, n_labels);
+    }
+    db_label_list_free(labels, n_labels);
 
     /* Show children if any */
     task_t *children = NULL;
@@ -899,5 +957,154 @@ todoc_err_t cmd_update(const cli_args_t *args)
     }
 
     display_success("todoc updated.");
+    return TODOC_OK;
+}
+
+/* ── add-label ───────────────────────────────────────────────── */
+
+todoc_err_t cmd_add_label(const cli_args_t *args)
+{
+    if (!args->label_name) {
+        display_error("Label name is required.");
+        display_info("Usage: todoc add-label <name> [--color <c>]");
+        return TODOC_ERR_INVALID;
+    }
+
+    label_t label = {0};
+    label.name = args->label_name;
+    label.color = args->label_color;
+
+    int64_t new_id = 0;
+    todoc_err_t err = db_label_insert(&label, &new_id);
+    if (err == TODOC_ERR_INVALID) {
+        display_error("Label '%s' already exists.", args->label_name);
+        return err;
+    }
+    if (err != TODOC_OK) {
+        display_error("Failed to create label: %s", db_last_error());
+        return err;
+    }
+
+    display_success("Label '%s' created.", args->label_name);
+    return TODOC_OK;
+}
+
+/* ── list-labels ─────────────────────────────────────────────── */
+
+todoc_err_t cmd_list_labels(const cli_args_t *args)
+{
+    (void)args;
+
+    label_t *labels = NULL;
+    int count = 0;
+    todoc_err_t err = db_label_list(&labels, &count);
+    if (err != TODOC_OK) {
+        display_error("Failed to list labels: %s", db_last_error());
+        return err;
+    }
+
+    display_label_list(labels, count);
+    db_label_list_free(labels, count);
+    return TODOC_OK;
+}
+
+/* ── rm-label ────────────────────────────────────────────────── */
+
+todoc_err_t cmd_rm_label(const cli_args_t *args)
+{
+    if (!args->label_name) {
+        display_error("Label name is required.");
+        display_info("Usage: todoc rm-label <name>");
+        return TODOC_ERR_INVALID;
+    }
+
+    todoc_err_t err = db_label_delete_by_name(args->label_name);
+    if (err == TODOC_ERR_NOT_FOUND) {
+        display_error("Label '%s' not found.", args->label_name);
+        return err;
+    }
+    if (err != TODOC_OK) {
+        display_error("Failed to delete label: %s", db_last_error());
+        return err;
+    }
+
+    display_success("Label '%s' deleted.", args->label_name);
+    return TODOC_OK;
+}
+
+/* ── label ───────────────────────────────────────────────────── */
+
+todoc_err_t cmd_label(const cli_args_t *args)
+{
+    if (args->task_id <= 0 || !args->label_name) {
+        display_error("Task ID and label name are required.");
+        display_info("Usage: todoc label <id> <label>");
+        return TODOC_ERR_INVALID;
+    }
+
+    /* Verify task exists for a friendlier error than a junction insert. */
+    task_t task = {0};
+    todoc_err_t err = db_task_get(args->task_id, &task);
+    if (err == TODOC_ERR_NOT_FOUND) {
+        display_error("Task #%lld not found.", (long long)args->task_id);
+        return err;
+    }
+    if (err != TODOC_OK) {
+        display_error("Failed to load task: %s", db_last_error());
+        return err;
+    }
+    task_free(&task);
+
+    int64_t label_id = 0;
+    err = db_label_ensure(args->label_name, &label_id);
+    if (err != TODOC_OK) {
+        display_error("Failed to create label: %s", db_last_error());
+        return err;
+    }
+
+    err = db_task_attach_label(args->task_id, label_id);
+    if (err != TODOC_OK) {
+        display_error("Failed to attach label: %s", db_last_error());
+        return err;
+    }
+
+    display_success("Task #%lld labelled '%s'.", (long long)args->task_id, args->label_name);
+    return TODOC_OK;
+}
+
+/* ── unlabel ─────────────────────────────────────────────────── */
+
+todoc_err_t cmd_unlabel(const cli_args_t *args)
+{
+    if (args->task_id <= 0 || !args->label_name) {
+        display_error("Task ID and label name are required.");
+        display_info("Usage: todoc unlabel <id> <label>");
+        return TODOC_ERR_INVALID;
+    }
+
+    label_t label = {0};
+    todoc_err_t err = db_label_get_by_name(args->label_name, &label);
+    if (err == TODOC_ERR_NOT_FOUND) {
+        display_error("Label '%s' not found.", args->label_name);
+        return err;
+    }
+    if (err != TODOC_OK) {
+        display_error("Failed to load label: %s", db_last_error());
+        return err;
+    }
+
+    err = db_task_detach_label(args->task_id, label.id);
+    label_free(&label);
+    if (err == TODOC_ERR_NOT_FOUND) {
+        display_error("Task #%lld is not labelled '%s'.", (long long)args->task_id,
+                      args->label_name);
+        return err;
+    }
+    if (err != TODOC_OK) {
+        display_error("Failed to detach label: %s", db_last_error());
+        return err;
+    }
+
+    display_success("Task #%lld unlabelled '%s'.", (long long)args->task_id, args->label_name);
     return TODOC_OK;
 }

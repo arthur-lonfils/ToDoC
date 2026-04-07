@@ -33,6 +33,11 @@ typedef enum {
     CMD_VERSION,
     CMD_UPDATE,
     CMD_MOVE,
+    CMD_ADD_LABEL,
+    CMD_LIST_LABELS,
+    CMD_RM_LABEL,
+    CMD_LABEL,
+    CMD_UNLABEL,
 } command_t;
 
 /* ── Parsed CLI arguments ────────────────────────────────────── */
@@ -80,6 +85,16 @@ typedef struct {
 
     /* For 'move': --global removes all project assignments */
     int global;
+
+    /* For label commands and --label flag.
+     * label_name: positional name on add-label/rm-label/label/unlabel
+     * label_color: --color on add-label
+     * labels: comma-separated list passed to 'add --label foo,bar' or
+     *         the single value passed to 'list --label foo' (which
+     *         also lives in filter.label). Owned by cli_args_t. */
+    char *label_name;
+    char *label_color;
+    char *labels;
 } cli_args_t;
 
 /* Parse argc/argv into a cli_args_t. Returns TODOC_OK or TODOC_ERR_INVALID.

@@ -68,12 +68,27 @@ void task_filter_free(task_filter_t *filter)
     free(filter->type);
     free(filter->scope);
     free(filter->project);
+    free(filter->label);
 
     filter->status = NULL;
     filter->priority = NULL;
     filter->type = NULL;
     filter->scope = NULL;
     filter->project = NULL;
+    filter->label = NULL;
+}
+
+void label_free(label_t *label)
+{
+    if (!label) {
+        return;
+    }
+    free(label->name);
+    free(label->color);
+    free(label->created_at);
+    label->name = NULL;
+    label->color = NULL;
+    label->created_at = NULL;
 }
 
 void project_free(project_t *project)

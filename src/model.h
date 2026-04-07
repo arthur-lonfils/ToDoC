@@ -87,6 +87,15 @@ typedef struct {
     char *updated_at; /* heap-allocated ISO-8601, set by DB */
 } project_t;
 
+/* ── Label struct ───────────────────────────────────────────── */
+
+typedef struct {
+    int64_t id;
+    char *name;       /* heap-allocated, required, unique */
+    char *color;      /* heap-allocated, nullable */
+    char *created_at; /* heap-allocated ISO-8601, set by DB */
+} label_t;
+
 /* ── Filter for task list queries ──────────────────────────────── */
 
 typedef struct {
@@ -95,6 +104,7 @@ typedef struct {
     task_type_t *type;
     char *scope;
     char *project; /* project name filter, NULL = no filter */
+    char *label;   /* single label name filter, NULL = no filter */
     int all;       /* 1 = show all, bypass active project */
     int limit;     /* 0 = no limit */
 } task_filter_t;
@@ -122,6 +132,7 @@ void task_free(task_t *task);
 void task_filter_free(task_filter_t *filter);
 void project_free(project_t *project);
 void project_filter_free(project_filter_t *filter);
+void label_free(label_t *label);
 
 /* ── Enum <-> string conversion ──────────────────────────────── */
 

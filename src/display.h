@@ -34,6 +34,11 @@ void display_project_row(const project_t *project);
 void display_project_detail(const project_t *project, int task_count);
 void display_project_list(const project_t *projects, int count);
 
+/* ── Label output ───────────────────────────────────────────── */
+
+void display_label_list(const label_t *labels, int count);
+void display_label_inline(const label_t *labels, int count);
+
 /* ── Feedback messages ───────────────────────────────────────── */
 
 void display_success(const char *fmt, ...);

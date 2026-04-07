@@ -84,6 +84,26 @@ int db_project_task_count(int64_t project_id);
 todoc_err_t db_task_assign_project(int64_t task_id, int64_t project_id);
 todoc_err_t db_task_unassign_project(int64_t task_id, int64_t project_id);
 
+/* ── Label CRUD ─────────────────────────────────────────────── */
+
+todoc_err_t db_label_insert(const label_t *label, int64_t *out_id);
+todoc_err_t db_label_get_by_name(const char *name, label_t *out_label);
+todoc_err_t db_label_delete_by_name(const char *name);
+todoc_err_t db_label_list(label_t **out_labels, int *out_count);
+void db_label_list_free(label_t *labels, int count);
+
+/* Get-or-create a label by name. *out_id is set to the label id. */
+todoc_err_t db_label_ensure(const char *name, int64_t *out_id);
+
+/* ── Task-Label junction ────────────────────────────────────── */
+
+todoc_err_t db_task_attach_label(int64_t task_id, int64_t label_id);
+todoc_err_t db_task_detach_label(int64_t task_id, int64_t label_id);
+
+/* Fetch the labels attached to a task. Caller frees with
+ * db_label_list_free(*out_labels, *out_count). */
+todoc_err_t db_task_get_labels(int64_t task_id, label_t **out_labels, int *out_count);
+
 /* Last SQLite error message (valid until next db_* call) */
 const char *db_last_error(void);
 

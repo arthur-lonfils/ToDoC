@@ -25,4 +25,10 @@ todoc_err_t cmd_unassign(const cli_args_t *args);
 todoc_err_t cmd_update(const cli_args_t *args);
 todoc_err_t cmd_move(const cli_args_t *args);
 
+todoc_err_t cmd_add_label(const cli_args_t *args);
+todoc_err_t cmd_list_labels(const cli_args_t *args);
+todoc_err_t cmd_rm_label(const cli_args_t *args);
+todoc_err_t cmd_label(const cli_args_t *args);
+todoc_err_t cmd_unlabel(const cli_args_t *args);
+
 #endif

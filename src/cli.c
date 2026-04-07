@@ -41,6 +41,11 @@ static const cmd_entry_t cmd_table[] = {
     {"-v", CMD_VERSION},
     {"update", CMD_UPDATE},
     {"move", CMD_MOVE},
+    {"add-label", CMD_ADD_LABEL},
+    {"list-labels", CMD_LIST_LABELS},
+    {"rm-label", CMD_RM_LABEL},
+    {"label", CMD_LABEL},
+    {"unlabel", CMD_UNLABEL},
     {NULL, CMD_NONE},
 };
 
@@ -265,8 +270,13 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
             if (!val) {
                 return TODOC_ERR_INVALID;
             }
-            free(out->project_color);
-            out->project_color = todoc_strdup(val);
+            if (out->command == CMD_ADD_LABEL) {
+                free(out->label_color);
+                out->label_color = todoc_strdup(val);
+            } else {
+                free(out->project_color);
+                out->project_color = todoc_strdup(val);
+            }
         } else if (strcmp(arg, "--clear") == 0) {
             out->clear = 1;
         } else if (strcmp(arg, "--sub") == 0) {
@@ -288,6 +298,18 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
             }
         } else if (strcmp(arg, "--global") == 0) {
             out->global = 1;
+        } else if (strcmp(arg, "--label") == 0 || strcmp(arg, "-l") == 0) {
+            const char *val = consume_value(argc, argv, &i, arg);
+            if (!val) {
+                return TODOC_ERR_INVALID;
+            }
+            free(out->labels);
+            out->labels = todoc_strdup(val);
+            /* Also feed the filter — for `list --label foo` the value
+             * is treated as a single label name. cmd_add splits the
+             * comma-separated form itself. */
+            free(out->filter.label);
+            out->filter.label = todoc_strdup(val);
         } else if (!is_flag(arg)) {
             /* Positional argument handling depends on command */
             if (out->command == CMD_ADD && !out->title) {
@@ -313,6 +335,17 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
                         out->command == CMD_MOVE) &&
                        !out->project_name) {
                 out->project_name = todoc_strdup(arg);
+            } else if ((out->command == CMD_ADD_LABEL || out->command == CMD_RM_LABEL) &&
+                       !out->label_name) {
+                out->label_name = todoc_strdup(arg);
+            } else if ((out->command == CMD_LABEL || out->command == CMD_UNLABEL) &&
+                       out->task_id == 0) {
+                if (parse_task_id(arg, &out->task_id) != 0) {
+                    return TODOC_ERR_INVALID;
+                }
+            } else if ((out->command == CMD_LABEL || out->command == CMD_UNLABEL) &&
+                       !out->label_name) {
+                out->label_name = todoc_strdup(arg);
             } else {
                 fprintf(stderr, "todoc: unexpected argument '%s'\n", arg);
                 return TODOC_ERR_INVALID;
@@ -378,6 +411,9 @@ void cli_args_free(cli_args_t *args)
     free(args->project_status);
     free(args->project);
     free(args->help_topic);
+    free(args->label_name);
+    free(args->label_color);
+    free(args->labels);
     memset(args, 0, sizeof(*args));
 }
 
@@ -415,6 +451,13 @@ static void print_overview(void)
            "  move <id> <project>        Replace task's project assignments\n"
            "  move <id> --global         Remove all project assignments\n"
            "\n"
+           "Label Commands:\n"
+           "  add-label <name>           Create a new label\n"
+           "  list-labels                List all labels\n"
+           "  rm-label <name>            Delete a label\n"
+           "  label <id> <label>         Attach a label to a task\n"
+           "  unlabel <id> <label>       Detach a label from a task\n"
+           "\n"
            "Other:\n"
            "  help [topic]               Show help (run 'todoc help help' for topics)\n"
            "  version                    Show version\n"
@@ -423,6 +466,7 @@ static void print_overview(void)
            "Help Topics:\n"
            "  todoc help task            Task commands and options\n"
            "  todoc help project         Project commands and options\n"
+           "  todoc help label           Labels (cross-cutting tags)\n"
            "  todoc help export          Export formats and filters\n"
            "  todoc help <command>       Help for a specific command (e.g. 'add', 'use')\n"
            "\n"
@@ -459,6 +503,7 @@ static void print_task_topic(void)
            "  --due <YYYY-MM-DD>         Due date\n"
            "  --sub <parent-id>          Make this task a subtask of <parent-id>\n"
            "  --sub none                 (edit only) Promote a subtask to top-level\n"
+           "  --label, -l <name[,...]>   Attach labels (add) or filter (list)\n"
            "  --limit <n>                Limit list results\n"
            "  --project, -P <name>       Filter by or assign to project\n"
            "  --all                      Show all tasks (bypass active project)\n"
@@ -550,6 +595,39 @@ static void print_export_topic(void)
            "  todoc export --format json > tasks.json\n"
            "  todoc export --status done --format csv > done.csv\n"
            "  todoc export --project auth --format json\n");
+}
+
+static void print_label_topic(void)
+{
+    printf("todoc — Labels\n"
+           "\n"
+           "Labels are free-form, many-to-many tags. A task can carry any\n"
+           "number of labels, and a label can be attached to any number\n"
+           "of tasks. Labels are independent of 'scope' (one primary string\n"
+           "per task) — use scope for the area of the system, labels for\n"
+           "cross-cutting attributes like 'urgent', 'blocked-on-x', 'v2'.\n"
+           "\n"
+           "Labels are auto-created on first use, so 'todoc label 5 urgent'\n"
+           "and 'todoc add ... --label urgent' both work without ceremony.\n"
+           "\n"
+           "Commands:\n"
+           "  add-label <name> [--color]  Create a label (optional metadata)\n"
+           "  list-labels                 List every label\n"
+           "  rm-label <name>             Delete a label (cascades to associations)\n"
+           "  label <id> <label>          Attach a label to a task\n"
+           "  unlabel <id> <label>        Detach a label from a task\n"
+           "\n"
+           "Filtering and creation:\n"
+           "  todoc add \"...\" --label urgent,blocked     Attach on creation\n"
+           "  todoc list --label urgent                  Filter by label\n"
+           "\n"
+           "Examples:\n"
+           "  todoc add-label urgent --color red\n"
+           "  todoc add \"Fix login\" --type bug --label urgent,security\n"
+           "  todoc label 12 blocked-on-design\n"
+           "  todoc list --label urgent\n"
+           "  todoc unlabel 12 blocked-on-design\n"
+           "  todoc rm-label v1\n");
 }
 
 /* Per-command focused help. Returns 1 if printed, 0 if no match. */
@@ -651,6 +729,25 @@ static int print_command_topic(const char *cmd)
                "links with exactly the target. Moving a parent task atomically\n"
                "moves all its children to the same project. Subtasks cannot\n"
                "be moved directly — move the parent instead.\n");
+    } else if (strcmp(cmd, "add-label") == 0) {
+        printf("todoc add-label <name> [--color <c>] — Create a new label\n"
+               "\n"
+               "Labels are usually auto-created when first used by 'label' or\n"
+               "'add --label'. Use this command only when you want to set\n"
+               "optional metadata (color) up front.\n");
+    } else if (strcmp(cmd, "list-labels") == 0) {
+        printf("todoc list-labels — List every label\n");
+    } else if (strcmp(cmd, "rm-label") == 0) {
+        printf("todoc rm-label <name> — Delete a label\n"
+               "\n"
+               "Tasks that carried the label are not affected — only the\n"
+               "label row and its associations are removed.\n");
+    } else if (strcmp(cmd, "label") == 0) {
+        printf("todoc label <id> <label> — Attach a label to a task\n"
+               "\n"
+               "The label is auto-created if it does not already exist.\n");
+    } else if (strcmp(cmd, "unlabel") == 0) {
+        printf("todoc unlabel <id> <label> — Detach a label from a task\n");
     } else if (strcmp(cmd, "help") == 0) {
         printf("todoc help [topic] — Show help\n"
                "\n"
@@ -699,6 +796,10 @@ int cli_print_help(const char *topic)
     }
     if (strcmp(topic, "project") == 0 || strcmp(topic, "projects") == 0) {
         print_project_topic();
+        return 0;
+    }
+    if (strcmp(topic, "label") == 0 || strcmp(topic, "labels") == 0) {
+        print_label_topic();
         return 0;
     }
     if (strcmp(topic, "export") == 0) {
