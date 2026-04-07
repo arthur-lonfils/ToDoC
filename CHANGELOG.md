@@ -4,6 +4,17 @@ All notable changes to **todoc** are documented here.
 
 Format based on [Conventional Commits](https://conventionalcommits.org).
 
+## [0.4.0] — 2026-04-07
+
+### Bug Fixes
+
+- Read version from .version in tests instead of hardcoding(c989ccf)
+
+### Features
+
+- Add projects for grouping and scoping tasks(429f19f)
+- Add install/update script and document one-line install(4b3e8e7)
+
 ## [0.3.0] — 2026-04-03
 
 ### Bug Fixes
@@ -20,6 +31,7 @@ Format based on [Conventional Commits](https://conventionalcommits.org).
 - Checkout main explicitly in publish job (#4)(7efebac)
 - Use merge_commit_sha for publish checkout(0ff2c78)
 - Simplify release to tag-triggered workflow(a4379db)
+- Check TODOC_VERSION in cli.h instead of cli.c(a0f7e9d)
 
 ### Documentation
 

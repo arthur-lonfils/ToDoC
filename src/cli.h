@@ -1,7 +1,7 @@
 #ifndef TODOC_CLI_H
 #define TODOC_CLI_H
 
-#define TODOC_VERSION "0.3.0"
+#define TODOC_VERSION "0.4.0"
 
 #include "export.h"
 #include "model.h"
