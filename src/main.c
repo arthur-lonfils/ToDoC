@@ -72,6 +72,13 @@ int main(int argc, char **argv)
         return (err == TODOC_OK) ? 0 : 1;
     }
 
+    /* uninstall removes the binary itself; no DB needed */
+    if (args.command == CMD_UNINSTALL) {
+        err = cmd_uninstall(&args);
+        cli_args_free(&args);
+        return (err == TODOC_OK) ? 0 : 1;
+    }
+
     /* All other commands need the database open */
     if (db_open() != TODOC_OK) {
         output_error("dispatch", "db_error", "Failed to open database: %s", db_last_error());

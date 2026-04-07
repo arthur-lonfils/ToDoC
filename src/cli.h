@@ -40,6 +40,7 @@ typedef enum {
     CMD_UNLABEL,
     CMD_CHANGELOG,
     CMD_MODE,
+    CMD_UNINSTALL,
 } command_t;
 
 /* ── Parsed CLI arguments ────────────────────────────────────── */
@@ -108,6 +109,12 @@ typedef struct {
 
     /* For --json one-shot flag (forces ai mode for this invocation) */
     int output_json;
+
+    /* For 'uninstall'
+     *   yes:   --yes / -y skips the interactive confirmation prompt
+     *   purge: --purge also removes ~/.todoc/ (data + backups) */
+    int yes;
+    int purge;
 } cli_args_t;
 
 /* Parse argc/argv into a cli_args_t. Returns TODOC_OK or TODOC_ERR_INVALID.

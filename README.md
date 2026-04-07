@@ -150,6 +150,20 @@ todoc show 9999
 # exit:   1
 ```
 
+### Uninstall
+
+```bash
+todoc uninstall                  # interactive prompt, keeps ~/.todoc/ data
+todoc uninstall --yes            # no prompt
+todoc uninstall --purge          # also wipe ~/.todoc/ (data + backups)
+todoc uninstall --purge --yes    # full nuke, no prompt
+```
+
+For a system-wide install (`/usr/local/bin/todoc`) re-run with sudo —
+todoc will tell you when permission is denied. Self-removal is safe
+on Linux: the inode survives until the running process exits, so the
+success message still prints.
+
 ### Build from source
 
 **Requirements:** GCC (C11), libsqlite3-dev

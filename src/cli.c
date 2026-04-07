@@ -48,6 +48,7 @@ static const cmd_entry_t cmd_table[] = {
     {"unlabel", CMD_UNLABEL},
     {"changelog", CMD_CHANGELOG},
     {"mode", CMD_MODE},
+    {"uninstall", CMD_UNINSTALL},
     {NULL, CMD_NONE},
 };
 
@@ -323,6 +324,10 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
             out->changelog_list = 1;
         } else if (strcmp(arg, "--json") == 0 || strcmp(arg, "-j") == 0) {
             out->output_json = 1;
+        } else if (strcmp(arg, "--yes") == 0 || strcmp(arg, "-y") == 0) {
+            out->yes = 1;
+        } else if (strcmp(arg, "--purge") == 0) {
+            out->purge = 1;
         } else if (!is_flag(arg)) {
             /* Positional argument handling depends on command */
             if (out->command == CMD_ADD && !out->title) {
@@ -484,6 +489,7 @@ static void print_overview(void)
            "  update                     Update todoc to the latest release\n"
            "  changelog [version]        Show release notes (--all, --since, --list)\n"
            "  mode [ai|user]             Switch output mode (JSON for LLM agents)\n"
+           "  uninstall                  Remove the todoc binary (--purge wipes data)\n"
            "\n"
            "Global flags:\n"
            "  --json, -j                 One-shot ai mode for the next command\n"
@@ -773,6 +779,24 @@ static int print_command_topic(const char *cmd)
                "The label is auto-created if it does not already exist.\n");
     } else if (strcmp(cmd, "unlabel") == 0) {
         printf("todoc unlabel <id> <label> — Detach a label from a task\n");
+    } else if (strcmp(cmd, "uninstall") == 0) {
+        printf("todoc uninstall — Remove the todoc binary\n"
+               "\n"
+               "Usage:\n"
+               "  todoc uninstall              Remove the binary, keep ~/.todoc/ data\n"
+               "  todoc uninstall --yes        Same, but skip the interactive confirmation\n"
+               "  todoc uninstall --purge      Also remove ~/.todoc/ (data and backups)\n"
+               "  todoc uninstall --purge -y   Full nuke, no prompt\n"
+               "\n"
+               "If todoc is installed in a system directory like /usr/local/bin\n"
+               "the unlink will fail with permission denied — re-run with sudo:\n"
+               "\n"
+               "  sudo todoc uninstall --purge -y\n"
+               "\n"
+               "Self-removal is safe on Linux: unlink() removes the directory\n"
+               "entry but the running process keeps the inode until it exits,\n"
+               "so the success message still prints. In ai mode --yes is\n"
+               "required (interactive prompts can't be answered).\n");
     } else if (strcmp(cmd, "mode") == 0) {
         printf("todoc mode [ai|user] — Switch output mode\n"
                "\n"

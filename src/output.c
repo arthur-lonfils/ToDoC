@@ -723,6 +723,32 @@ void output_update_done(const char *current_version)
     display_info("Run 'todoc changelog' to see what's new.");
 }
 
+void output_uninstalled(const char *binary_path, int data_purged, const char *data_path)
+{
+    if (output_is_ai()) {
+        env_open(stdout, "uninstall", 1);
+        fputc('{', stdout);
+        json_key(stdout, "binary_path");
+        json_str(stdout, binary_path);
+        fputc(',', stdout);
+        json_key(stdout, "data_purged");
+        json_bool(stdout, data_purged);
+        fputc(',', stdout);
+        json_key(stdout, "data_path");
+        json_str(stdout, data_path);
+        fputc('}', stdout);
+        env_close(stdout);
+        return;
+    }
+    display_success("todoc removed from %s", binary_path);
+    if (data_purged) {
+        display_info("Also removed %s (data + backups)", data_path);
+    } else {
+        display_info("Your data in %s was kept.", data_path ? data_path : "~/.todoc/");
+        display_info("Pass --purge next time to remove it too.");
+    }
+}
+
 /* ── Generic success / error ────────────────────────────────── */
 
 void output_success(const char *command, const char *fmt, ...)
