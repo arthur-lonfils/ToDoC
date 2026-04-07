@@ -280,8 +280,9 @@ echo "Help & Version:"
 assert_output  "help shows usage"        "Usage:"           help
 assert_output  "--help works"            "Usage:"           --help
 assert_output  "-h works"                "Usage:"           -h
-assert_output  "version shows number"    "0.3.0"            version
-assert_output  "--version works"         "0.3.0"            --version
+VERSION=$(cat .version 2>/dev/null | tr -d '[:space:]')
+assert_output  "version shows number"    "$VERSION"         version
+assert_output  "--version works"         "$VERSION"         --version
 echo ""
 
 # ── 10. Error handling ──────────────────────────────────────────
