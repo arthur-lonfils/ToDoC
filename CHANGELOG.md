@@ -4,6 +4,16 @@ All notable changes to **todoc** are documented here.
 
 Format based on [Conventional Commits](https://conventionalcommits.org).
 
+## [0.10.0] — 2026-04-07
+
+### Build
+
+- Track header dependencies with -MMD -MP(b392c92)
+
+### Features
+
+- **cli:** Auto-detect agent mode and drop persistent setter(fe36493)
+
 ## [0.9.0] — 2026-04-07
 
 ### Bug Fixes
