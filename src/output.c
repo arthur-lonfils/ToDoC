@@ -10,6 +10,7 @@
 /* ── Mode state ──────────────────────────────────────────────── */
 
 static output_mode_t g_mode = OUTPUT_MODE_USER;
+static const char *g_mode_source = "default";
 
 static void apply_mode(void)
 {
@@ -21,28 +22,99 @@ static void apply_mode(void)
     }
 }
 
+/* Markers that strongly indicate todoc is being driven by an AI agent
+ * inside a tool-using session, not a human in a terminal. Each entry
+ * is checked with getenv(); the first non-empty hit wins and is
+ * recorded as the source string. The list is intentionally tight —
+ * we only want signals that are unambiguous "I'm an agent", not
+ * generic "I'm in VS Code". The TODOC_AGENT=1 entry is the documented
+ * opt-in for any agent we don't auto-detect. */
+static const char *const k_agent_env_vars[] = {
+    "TODOC_AGENT",            /* explicit opt-in for unknown agents */
+    "CLAUDECODE",             /* Claude Code CLI */
+    "CLAUDE_CODE_ENTRYPOINT", /* Claude Code CLI */
+    "CLAUDE_PROJECT_DIR",     /* Claude Code CLI */
+    "CURSOR_TRACE_ID",        /* Cursor */
+    NULL,
+};
+
+/* Returns a pointer to the matching env-var name, or NULL. */
+static const char *detect_agent_env(void)
+{
+    for (const char *const *p = k_agent_env_vars; *p; p++) {
+        const char *v = getenv(*p);
+        if (v && v[0] != '\0') {
+            return *p;
+        }
+    }
+    return NULL;
+}
+
+/* If a stale ~/.todoc/mode file from a pre-auto-detect version still
+ * exists, remove it silently. The mode is no longer persisted, but
+ * leaving the file around would be confusing for anyone inspecting
+ * ~/.todoc/. Errors are ignored — this is best-effort housekeeping. */
+static void remove_legacy_mode_file(void)
+{
+    char *dir = todoc_dir_path();
+    if (!dir) {
+        return;
+    }
+    size_t len = strlen(dir) + strlen("/mode") + 1;
+    char *path = malloc(len);
+    if (path) {
+        snprintf(path, len, "%s/mode", dir);
+        (void)remove(path);
+        free(path);
+    }
+    free(dir);
+}
+
 void output_init(int json_flag)
 {
+    /* Resolution order: --json > TODOC_MODE > agent-env auto-detect > default. */
     if (json_flag) {
         g_mode = OUTPUT_MODE_AI;
+        g_mode_source = "json-flag";
         apply_mode();
+        remove_legacy_mode_file();
         return;
     }
     const char *env = getenv("TODOC_MODE");
     if (env && env[0] != '\0') {
         if (strcmp(env, "ai") == 0) {
             g_mode = OUTPUT_MODE_AI;
+            g_mode_source = "env-var";
             apply_mode();
+            remove_legacy_mode_file();
             return;
         }
         if (strcmp(env, "user") == 0) {
             g_mode = OUTPUT_MODE_USER;
+            g_mode_source = "env-var";
             apply_mode();
+            remove_legacy_mode_file();
             return;
         }
+        /* Unknown TODOC_MODE value: fall through to auto-detect. */
     }
-    g_mode = todoc_get_mode();
+    const char *agent = detect_agent_env();
+    if (agent) {
+        g_mode = OUTPUT_MODE_AI;
+        /* Build a per-call source string. We only need to expose the
+         * first matched var; reuse a small static buffer so the
+         * pointer remains valid for the lifetime of the process. */
+        static char buf[64];
+        snprintf(buf, sizeof(buf), "auto-detect:%s", agent);
+        g_mode_source = buf;
+        apply_mode();
+        remove_legacy_mode_file();
+        return;
+    }
+    g_mode = OUTPUT_MODE_USER;
+    g_mode_source = "default";
     apply_mode();
+    remove_legacy_mode_file();
 }
 
 output_mode_t output_get_mode(void)
@@ -53,6 +125,11 @@ output_mode_t output_get_mode(void)
 int output_is_ai(void)
 {
     return g_mode == OUTPUT_MODE_AI;
+}
+
+const char *output_mode_source(void)
+{
+    return g_mode_source;
 }
 
 /* ── Envelope helpers (ai mode only) ────────────────────────── */
@@ -683,29 +760,25 @@ void output_init_db(const char *db_path, int already_existed)
     display_success("Database initialized at %s", db_path ? db_path : "~/.todoc/todoc.db");
 }
 
-void output_mode_status(output_mode_t mode, int just_set)
+void output_mode_status(output_mode_t mode, const char *source)
 {
-    /* Mode is intentionally always rendered in the user-friendly format
-     * — even when current mode is AI — because it's a meta-command and
-     * the user must always be able to see what mode they're in. We do
-     * still emit a JSON envelope when in AI mode for consistency. */
+    /* 'mode' is a read-only diagnostic. It reports the resolved mode
+     * for this process and the source that won the resolution race
+     * (json-flag, env-var, auto-detect:<var>, or default). */
     if (output_is_ai()) {
         env_open(stdout, "mode", 1);
         fputc('{', stdout);
         json_key(stdout, "mode");
         json_str(stdout, mode == OUTPUT_MODE_AI ? "ai" : "user");
         fputc(',', stdout);
-        json_key(stdout, "just_set");
-        json_bool(stdout, just_set);
+        json_key(stdout, "source");
+        json_str(stdout, source ? source : "default");
         fputc('}', stdout);
         env_close(stdout);
         return;
     }
-    if (just_set) {
-        display_success("Mode set to %s.", mode == OUTPUT_MODE_AI ? "ai" : "user");
-    } else {
-        printf("%s\n", mode == OUTPUT_MODE_AI ? "ai" : "user");
-    }
+    printf("%s (source: %s)\n", mode == OUTPUT_MODE_AI ? "ai" : "user",
+           source ? source : "default");
 }
 
 void output_update_done(const char *current_version)

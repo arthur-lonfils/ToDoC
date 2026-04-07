@@ -368,8 +368,6 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
                 out->label_name = todoc_strdup(arg);
             } else if (out->command == CMD_CHANGELOG && !out->changelog_version) {
                 out->changelog_version = todoc_strdup(arg);
-            } else if (out->command == CMD_MODE && !out->mode_target) {
-                out->mode_target = todoc_strdup(arg);
             } else if ((out->command == CMD_COMPLETIONS || out->command == CMD_COMPLETE) &&
                        !out->completion_target) {
                 out->completion_target = todoc_strdup(arg);
@@ -443,7 +441,6 @@ void cli_args_free(cli_args_t *args)
     free(args->labels);
     free(args->changelog_version);
     free(args->changelog_since);
-    free(args->mode_target);
     free(args->completion_target);
     memset(args, 0, sizeof(*args));
 }
@@ -494,7 +491,7 @@ static void print_overview(void)
            "  version                    Show version\n"
            "  update                     Update todoc to the latest release\n"
            "  changelog [version]        Show release notes (--all, --since, --list)\n"
-           "  mode [ai|user]             Switch output mode (JSON for LLM agents)\n"
+           "  mode                       Show the current output mode and its source\n"
            "  uninstall                  Remove the todoc binary (--purge wipes data)\n"
            "  completions <shell>        Print or install shell tab-completion scripts\n"
            "\n"
@@ -842,21 +839,24 @@ static int print_command_topic(const char *cmd)
                "so the success message still prints. In ai mode --yes is\n"
                "required (interactive prompts can't be answered).\n");
     } else if (strcmp(cmd, "mode") == 0) {
-        printf("todoc mode [ai|user] — Switch output mode\n"
+        printf("todoc mode — Show the current output mode\n"
                "\n"
                "todoc has two output modes:\n"
                "  user (default)  colored, human-formatted output\n"
                "  ai              structured JSON envelopes for LLM-driven agents\n"
                "\n"
                "Usage:\n"
-               "  todoc mode               Show the current mode\n"
-               "  todoc mode ai            Switch to ai mode persistently\n"
-               "  todoc mode user          Switch back to user mode\n"
+               "  todoc mode               Show the resolved mode and its source\n"
                "\n"
-               "Resolution order (highest precedence first):\n"
+               "Mode is resolved per-process — there is no persistent setting,\n"
+               "so an agent enabling ai mode in one terminal never affects\n"
+               "another terminal. Resolution order (highest precedence first):\n"
+               "\n"
                "  1. The --json flag (one-shot ai mode for one command)\n"
                "  2. The TODOC_MODE env var (ai or user)\n"
-               "  3. The persistent ~/.todoc/mode file\n"
+               "  3. Auto-detect: agent environment markers like CLAUDECODE,\n"
+               "     CLAUDE_CODE_ENTRYPOINT, CLAUDE_PROJECT_DIR, CURSOR_TRACE_ID,\n"
+               "     or the explicit TODOC_AGENT=1 opt-in\n"
                "  4. Default: user\n"
                "\n"
                "In ai mode:\n"

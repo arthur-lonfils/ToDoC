@@ -110,37 +110,48 @@ export TODOC_NO_UPDATE_CHECK=1
 
 ### Agent mode
 
-LLM-driven agents that drive todoc as a tool can switch into a
-structured-output mode where every command emits a single JSON
-envelope on stdout (and a JSON error envelope on stderr if it fails).
-Colors, info messages, warnings, and the update-check notification
-are all suppressed in this mode — stdout is guaranteed to be exactly
-one parseable JSON object.
+LLM-driven agents that drive todoc as a tool get a structured-output
+mode where every command emits a single JSON envelope on stdout (and
+a JSON error envelope on stderr if it fails). Colors, info messages,
+warnings, and the update-check notification are all suppressed —
+stdout is guaranteed to be exactly one parseable JSON object.
+
+Mode is **resolved per-process**, never persisted. That means an
+agent enabling ai mode in one terminal cannot accidentally flip your
+other terminals into JSON output. Resolution order (highest
+precedence first):
+
+1. `--json` / `-j` flag — one-shot for a single command
+2. `TODOC_MODE` env var (`ai` or `user`) — process scope
+3. **Auto-detect**: if any of `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`,
+   `CLAUDE_PROJECT_DIR`, `CURSOR_TRACE_ID`, or `TODOC_AGENT` is set
+   in the environment, todoc assumes it's being driven by an agent
+   and switches to ai mode automatically — no setup needed
+4. Default: `user` (colored human output)
+
+`todoc mode` is a read-only diagnostic that prints the resolved mode
+and the source that won the resolution race:
 
 ```bash
-todoc mode ai            # switch persistently
-todoc mode               # show current mode (then 'ai')
-todoc mode user          # switch back to colored human output
+todoc mode
+# user (source: default)
+
+CLAUDECODE=1 todoc mode
+# {"schema":"todoc/v1","command":"mode","ok":true,
+#  "data":{"mode":"ai","source":"auto-detect:CLAUDECODE"}}
 ```
 
-The persistent mode lives in `~/.todoc/mode`. Two ways to override
-it without flipping the file:
+For an agent we don't auto-detect, set `TODOC_AGENT=1` once at the
+start of the session. To force user mode even inside an agent shell
+(e.g. to read colored output yourself), export `TODOC_MODE=user` —
+it beats auto-detect.
+
+A typical one-shot from an agent:
 
 ```bash
-TODOC_MODE=ai todoc list           # process scope
-todoc list --json                  # one-shot for one command
-```
-
-Resolution order (highest precedence first): `--json` flag, then
-`TODOC_MODE` env var, then `~/.todoc/mode`, then default `user`.
-
-A typical agent workflow:
-
-```bash
-export TODOC_MODE=ai
-todoc add "Fix login" --type bug --priority high
+todoc add "Fix login" --type bug --priority high --json
 # → {"schema":"todoc/v1","command":"add","ok":true,"data":{"task":{"id":42,...}}}
-todoc list | jq '.data.tasks[] | {id, title, status}'
+todoc list --json | jq '.data.tasks[] | {id, title, status}'
 ```
 
 Errors:

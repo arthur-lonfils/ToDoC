@@ -37,7 +37,7 @@ _todoc() {
         'label:Attach a label to a task'
         'unlabel:Detach a label from a task'
         'changelog:Show release notes'
-        'mode:Switch output mode (ai or user)'
+        'mode:Show the current output mode and its source'
         'help:Show help'
         'version:Show version'
         'update:Update todoc'
@@ -112,9 +112,6 @@ _todoc() {
                         '--all[Bypass active project]' \
                         '--limit[Limit results]' \
                         '--json[One-shot ai mode]'
-                    ;;
-                mode)
-                    _arguments "1:mode:(ai user)"
                     ;;
                 help)
                     _arguments "1:topic:($(todoc complete topics 2>/dev/null))"

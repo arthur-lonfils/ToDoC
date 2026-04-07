@@ -5,6 +5,11 @@ CFLAGS  += -D_POSIX_C_SOURCE=200809L
 # ISO C99 4095-byte string-literal portability minimum. Modern
 # compilers handle multi-MB literals fine.
 CFLAGS  += -Wno-overlength-strings
+# Emit a .d file next to each .o so header edits trigger a recompile
+# of the right objects. -MP adds phony targets for each dependency so
+# renaming/deleting a header doesn't break the build with a "no rule
+# to make target" error.
+CFLAGS  += -MMD -MP
 LDFLAGS  =
 LDLIBS   = -lsqlite3
 
@@ -59,6 +64,11 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 $(BUILD_DIR)/migrations.o: $(MIGRATIONS_SRC)
 $(BUILD_DIR)/changelog_data.o: $(CHANGELOG_SRC)
 $(BUILD_DIR)/completions_data.o: $(COMPLETIONS_SRC)
+
+# Pull in the auto-generated header dependencies emitted by -MMD.
+# The leading '-' swallows the "no such file" error on the first
+# build when no .d files exist yet.
+-include $(OBJS:.o=.d)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)

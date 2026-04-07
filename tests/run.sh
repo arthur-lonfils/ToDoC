@@ -16,6 +16,13 @@ export HOME="$TEST_HOME"
 # tests below temporarily unset this for a single command.
 export TODOC_NO_UPDATE_CHECK=1
 
+# Strip any agent-mode env vars inherited from the developer's shell.
+# todoc auto-detects ai mode from these (so an agent flips itself
+# automatically), but the user-mode assertions in this suite must run
+# in plain user mode. The dedicated agent-mode test block below
+# re-injects each var explicitly with `env`.
+unset TODOC_MODE TODOC_AGENT CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_PROJECT_DIR CURSOR_TRACE_ID
+
 PASS=0
 FAIL=0
 USE_VALGRIND=0
@@ -504,28 +511,41 @@ rm -f "$CACHE"
 echo ""
 
 # ── 8l. Mode / agent output ────────────────────────────────────
+#
+# Mode resolution is per-process, no persistent file. The order is:
+#   1. --json flag
+#   2. TODOC_MODE env var (ai|user)
+#   3. Auto-detect: CLAUDECODE / CLAUDE_CODE_ENTRYPOINT / CLAUDE_PROJECT_DIR
+#      / CURSOR_TRACE_ID / TODOC_AGENT
+#   4. default user
+#
+# The test suite must run as the agent's view of the world (no agent
+# env vars present), otherwise the auto-detect step would force every
+# command into ai mode and break the dozens of user-mode assertions
+# above. Make sure none of those vars are set for the rest of the file.
 
 echo "Mode / agent output:"
 
-# 'mode' (no arg) shows the current mode in plain text
-assert_output  "mode default is user"           "user"                          mode
+unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_PROJECT_DIR CURSOR_TRACE_ID TODOC_AGENT TODOC_MODE
 
-# Switch to ai mode persistently
-assert_ok      "mode set ai"                                                    mode ai
-# After switching, 'mode' shows ai inside a JSON envelope (because the
-# next process loads the file and resolves to ai at output_init time).
-assert_output  "mode reads back ai"             "\"mode\":\"ai\""               mode
+# 'mode' is read-only — it reports the resolved mode and its source
+assert_output  "mode default is user"            "user (source: default)"     mode
+assert_output  "mode default reports source"     "default"                    mode
+
+# --json flag is the one-shot override
+assert_output  "--json flag forces ai"           "\"mode\":\"ai\""            mode --json
+assert_output  "--json source is json-flag"      "\"source\":\"json-flag\""   mode --json
 
 # In ai mode every command emits a JSON envelope on stdout
-assert_output  "ai list emits envelope"         "\"schema\":\"todoc/v1\""       list
-assert_output  "ai list has tasks key"          "\"tasks\":"                    list
-assert_output  "ai add returns task object"     "\"task\":"                     add "Json task" --type chore
-assert_output  "ai stats wraps stats"           "\"by_status\":"                stats
+assert_output  "ai list emits envelope"          "\"schema\":\"todoc/v1\""    list --json
+assert_output  "ai list has tasks key"           "\"tasks\":"                 list --json
+assert_output  "ai add returns task object"      "\"task\":"                  add "Json task" --type chore --json
+assert_output  "ai stats wraps stats"            "\"by_status\":"             stats --json
 
 # Errors in ai mode go to stderr as JSON. assert_output requires exit 0
 # but errors exit non-zero, so we hand-roll a substring check that
 # tolerates a non-zero exit.
-err_out=$(run show 999999 2>&1 || true)
+err_out=$(run show 999999 --json 2>&1 || true)
 if echo "$err_out" | grep -q '"code":"not_found"'; then
     PASS=$((PASS + 1))
     printf "  \033[32mPASS\033[0m  ai not_found code in error envelope\n"
@@ -542,18 +562,12 @@ else
     printf "  \033[31mFAIL\033[0m  ai error envelope has command field\n"
     printf "        got: %s\n" "$err_out"
 fi
-assert_fail    "ai unknown task exits non-zero"                                 show 999999
+assert_fail    "ai unknown task exits non-zero"                                show 999999 --json
 
-# Switch back to user mode
-assert_ok      "back to user mode"                                              mode user
-assert_output  "user mode is default again"     "user"                          mode
+# After a one-shot --json call, the next user-mode call is unaffected
+assert_output  "user mode unaffected after json" "ID"                           list
 
-# --json flag works as a one-shot override even in user mode
-assert_output  "--json overrides for one cmd"   "\"schema\":\"todoc/v1\""       list --json
-# After the one-shot, persistent mode is unaffected
-assert_output  "user mode unaffected after"     "ID"                            list
-
-# TODOC_MODE env var (use `env` to inject the var into the subshell call)
+# TODOC_MODE env var (process scope)
 out=$(env TODOC_MODE=ai $TODOC list 2>&1)
 if echo "$out" | grep -q '"schema":"todoc/v1"'; then
     PASS=$((PASS + 1))
@@ -564,14 +578,65 @@ else
     printf "        got: %s\n" "$out"
 fi
 
+# TODOC_MODE=ai also surfaces in 'mode' source
+out=$(env TODOC_MODE=ai $TODOC mode 2>&1)
+if echo "$out" | grep -q '"source":"env-var"'; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  TODOC_MODE source is env-var\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  TODOC_MODE source is env-var\n"
+    printf "        got: %s\n" "$out"
+fi
+
+# TODOC_MODE=user beats auto-detect (escape hatch for humans whose
+# shell happens to set an agent marker — e.g. running todoc inside
+# `claude code` for personal use).
+out=$(env TODOC_MODE=user CLAUDECODE=1 $TODOC mode 2>&1)
+if echo "$out" | grep -q "user (source: env-var)"; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  TODOC_MODE=user beats auto-detect\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  TODOC_MODE=user beats auto-detect\n"
+    printf "        got: %s\n" "$out"
+fi
+
+# Auto-detect: each agent env var on its own should flip to ai mode.
+for var in CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_PROJECT_DIR CURSOR_TRACE_ID TODOC_AGENT; do
+    out=$(env "$var=1" $TODOC mode 2>&1)
+    if echo "$out" | grep -q "\"source\":\"auto-detect:$var\""; then
+        PASS=$((PASS + 1))
+        printf "  \033[32mPASS\033[0m  auto-detect via %s\n" "$var"
+    else
+        FAIL=$((FAIL + 1))
+        printf "  \033[31mFAIL\033[0m  auto-detect via %s\n" "$var"
+        printf "        got: %s\n" "$out"
+    fi
+done
+
+# Legacy ~/.todoc/mode file (pre-auto-detect versions) is silently
+# removed on startup so it never confuses anyone inspecting the
+# data dir.
+mkdir -p "$HOME/.todoc"
+echo "ai" > "$HOME/.todoc/mode"
+$TODOC list > /dev/null 2>&1 || true
+if [ ! -e "$HOME/.todoc/mode" ]; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  legacy mode file is removed on startup\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  legacy mode file is removed on startup\n"
+fi
+
 # Update-check warning is suppressed in ai mode
 mkdir -p "$HOME/.todoc"
 printf 'last_check=%d\nlatest_version=99.99.99\nbreaking=0\n' "$(date +%s)" > "$HOME/.todoc/update_check"
 assert_no_warn "ai suppresses update warning"   "Major release"                 list --json
 rm -f "$HOME/.todoc/update_check"
 
-# Help for the new command
-assert_output  "help command mode"              "Switch output mode"            help mode
+# Help for the read-only diagnostic
+assert_output  "help command mode"              "Show the current output mode"  help mode
 echo ""
 
 # ── 8m. Uninstall ──────────────────────────────────────────────
