@@ -37,6 +37,13 @@ int main(int argc, char **argv)
         return (err == TODOC_OK) ? 0 : 1;
     }
 
+    /* update shells out to the install script; no DB needed */
+    if (args.command == CMD_UPDATE) {
+        err = cmd_update(&args);
+        cli_args_free(&args);
+        return (err == TODOC_OK) ? 0 : 1;
+    }
+
     /* All other commands need the database open */
     if (db_open() != TODOC_OK) {
         display_error("Failed to open database: %s", db_last_error());

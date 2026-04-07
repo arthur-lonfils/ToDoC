@@ -285,7 +285,9 @@ assert_output  "help project topic"      "Project commands"   help project
 assert_output  "help export topic"       "Export"             help export
 assert_output  "help command add"        "Add a new task"     help add
 assert_output  "help command use"        "active project"     help use
+assert_output  "help command update"     "latest release"     help update
 assert_output  "help alias ls"           "List tasks"         help ls
+assert_output  "update listed in help"   "update"             help
 assert_fail    "help unknown topic"                           help nonsense
 VERSION=$(cat .version 2>/dev/null | tr -d '[:space:]')
 assert_output  "version shows number"    "$VERSION"           version

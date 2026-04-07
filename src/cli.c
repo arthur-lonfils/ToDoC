@@ -39,6 +39,7 @@ static const cmd_entry_t cmd_table[] = {
     {"version", CMD_VERSION},
     {"--version", CMD_VERSION},
     {"-v", CMD_VERSION},
+    {"update", CMD_UPDATE},
     {NULL, CMD_NONE},
 };
 
@@ -320,7 +321,7 @@ todoc_err_t cli_parse(int argc, char **argv, cli_args_t *out)
         return TODOC_ERR_INVALID;
     }
 
-    if (out->command == CMD_VERSION || out->command == CMD_INIT) {
+    if (out->command == CMD_VERSION || out->command == CMD_INIT || out->command == CMD_UPDATE) {
         return TODOC_OK;
     }
 
@@ -393,6 +394,7 @@ static void print_overview(void)
            "Other:\n"
            "  help [topic]               Show help (run 'todoc help help' for topics)\n"
            "  version                    Show version\n"
+           "  update                     Update todoc to the latest release\n"
            "\n"
            "Help Topics:\n"
            "  todoc help task            Task commands and options\n"
@@ -609,6 +611,25 @@ static int print_command_topic(const char *cmd)
                "  <command>   Any command name (e.g. 'add', 'use', 'edit-project')\n");
     } else if (strcmp(cmd, "version") == 0) {
         printf("todoc version — Show the installed version\n");
+    } else if (strcmp(cmd, "update") == 0) {
+        printf(
+            "todoc update — Update todoc to the latest release\n"
+            "\n"
+            "Downloads and installs the latest release binary from GitHub,\n"
+            "backs up your task database first, and applies any new schema\n"
+            "migrations automatically. Equivalent to:\n"
+            "\n"
+            "  curl -sSL "
+            "https://raw.githubusercontent.com/arthur-lonfils/ToDoC/main/scripts/install.sh | sh\n"
+            "\n"
+            "Steps performed:\n"
+            "  1. Backup ~/.todoc/todoc.db (if it exists)\n"
+            "  2. Download and install the latest release\n"
+            "  3. Run 'todoc init' to apply pending migrations\n"
+            "\n"
+            "The backup path is printed at the end so you can restore it\n"
+            "if anything goes wrong:\n"
+            "  cp ~/.todoc/todoc.db.backup-<timestamp> ~/.todoc/todoc.db\n");
     } else {
         return 0;
     }

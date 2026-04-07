@@ -639,3 +639,36 @@ todoc_err_t cmd_unassign(const cli_args_t *args)
                     args->project_name);
     return TODOC_OK;
 }
+
+/* ── update ──────────────────────────────────────────────────── */
+
+todoc_err_t cmd_update(const cli_args_t *args)
+{
+    (void)args;
+
+    /* Defer entirely to the install script: it handles platform detection,
+     * download, atomic replace, database backup, and 'todoc init' for
+     * pending migrations. Both this command and the curl one-liner from
+     * the README hit the exact same code path. */
+    const char *cmd = "curl -fsSL "
+                      "https://raw.githubusercontent.com/arthur-lonfils/ToDoC/main/scripts/"
+                      "install.sh | sh";
+
+    display_info("Updating todoc...");
+    display_info("Running: %s", cmd);
+
+    int rc = system(cmd);
+    if (rc == -1) {
+        display_error("Failed to launch update script.");
+        return TODOC_ERR_INVALID;
+    }
+    if (rc != 0) {
+        display_error("Update script exited with status %d.", rc);
+        display_info("Try running the install script manually:");
+        display_info("  %s", cmd);
+        return TODOC_ERR_INVALID;
+    }
+
+    display_success("todoc updated.");
+    return TODOC_OK;
+}

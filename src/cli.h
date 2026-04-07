@@ -31,6 +31,7 @@ typedef enum {
     CMD_UNASSIGN,
     CMD_HELP,
     CMD_VERSION,
+    CMD_UPDATE,
 } command_t;
 
 /* ── Parsed CLI arguments ────────────────────────────────────── */

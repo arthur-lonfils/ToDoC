@@ -114,6 +114,28 @@ info "Installed to $BIN_DIR/todoc"
 INSTALLED=$("$BIN_DIR/todoc" version 2>&1)
 info "$INSTALLED"
 
+# ── Backup existing database ─────────────────────────────────────
+
+DB="$HOME/.todoc/todoc.db"
+BACKUP=""
+if [ -f "$DB" ]; then
+    BACKUP="$DB.backup-$(date +%Y%m%d-%H%M%S)"
+    cp "$DB" "$BACKUP"
+    info "Backed up existing database to $BACKUP"
+fi
+
+# ── Apply pending migrations ─────────────────────────────────────
+
+info "Applying database migrations (todoc init)..."
+if "$BIN_DIR/todoc" init > /dev/null 2>&1; then
+    info "Database is up to date."
+else
+    warn "todoc init failed. Run it manually to see the error."
+    if [ -n "$BACKUP" ]; then
+        warn "Your backup is at: $BACKUP"
+    fi
+fi
+
 # ── PATH hint ────────────────────────────────────────────────────
 
 case ":$PATH:" in
@@ -126,4 +148,7 @@ case ":$PATH:" in
 esac
 
 echo ""
-info "Done. Run 'todoc init' to create your task database."
+info "Done."
+if [ -n "$BACKUP" ]; then
+    info "Database backup: $BACKUP"
+fi
