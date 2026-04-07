@@ -1,4 +1,5 @@
 #include "display.h"
+#include "util.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -127,6 +128,35 @@ void display_task_row(const task_t *task)
     printf("\n");
 }
 
+/* ── Subtask row (indented) ──────────────────────────────────── */
+
+void display_subtask_row(const task_t *task)
+{
+    const char *rst = clr(CLR_RESET);
+
+    /* Tree-style indent */
+    printf("    %s└─%s ", clr(CLR_DIM), rst);
+
+    printf("%s#%-4lld%s ", clr(CLR_DIM), (long long)task->id, rst);
+    printf("%s%-12s%s ", clr(status_color(task->status)), status_to_str(task->status), rst);
+    printf("%s%-9s%s ", clr(priority_color(task->priority)), priority_to_str(task->priority), rst);
+    printf("%s%-8s%s ", clr(type_color(task->type)), task_type_to_str(task->type), rst);
+
+    if (task->scope) {
+        printf("%s[%s]%s ", clr(CLR_CYAN), task->scope, rst);
+    }
+    if (task->due_date) {
+        printf("%s(%s)%s ", clr(CLR_YELLOW), task->due_date, rst);
+    }
+
+    if (status_is_terminal(task->status)) {
+        printf("%s%s%s", clr(CLR_DIM), task->title, rst);
+    } else {
+        printf("%s", task->title);
+    }
+    printf("\n");
+}
+
 /* ── Task detail ─────────────────────────────────────────────── */
 
 void display_task_detail(const task_t *task)
@@ -154,6 +184,9 @@ void display_task_detail(const task_t *task)
     if (task->due_date) {
         printf("  %-12s %s%s%s\n", "Due:", clr(CLR_YELLOW), task->due_date, rst);
     }
+    if (task->parent_id > 0) {
+        printf("  %-12s %s#%lld%s\n", "Parent:", clr(CLR_DIM), (long long)task->parent_id, rst);
+    }
 
     printf("\n");
     printf("  %sCreated:%s  %s\n", clr(CLR_DIM), rst, task->created_at ? task->created_at : "-");
@@ -161,7 +194,18 @@ void display_task_detail(const task_t *task)
     printf("\n");
 }
 
-/* ── Task list ───────────────────────────────────────────────── */
+/* ── Task list (tree) ────────────────────────────────────────── */
+
+/* Find a task by id within a slice. Returns -1 if not found. */
+static int find_task_index(const task_t *tasks, int count, int64_t id)
+{
+    for (int i = 0; i < count; i++) {
+        if (tasks[i].id == id) {
+            return i;
+        }
+    }
+    return -1;
+}
 
 void display_task_list(const task_t *tasks, int count)
 {
@@ -177,11 +221,51 @@ void display_task_list(const task_t *tasks, int count)
     printf("  %s%s%s\n", clr(CLR_DIM),
            "─────────────────────────────────────────────────────────────", rst);
 
+    /* Track which rows have already been printed (as children of a
+     * parent we visited). Anything left over is rendered as top-level. */
+    char *printed = todoc_calloc((size_t)count, sizeof(char));
+
+    /* Pass 1: top-level tasks (parent_id == 0 or parent missing from slice). */
     for (int i = 0; i < count; i++) {
-        display_task_row(&tasks[i]);
+        const task_t *t = &tasks[i];
+        if (t->parent_id != 0 && find_task_index(tasks, count, t->parent_id) >= 0) {
+            continue; /* will be rendered under its parent */
+        }
+        display_task_row(t);
+        printed[i] = 1;
+        for (int j = 0; j < count; j++) {
+            if (tasks[j].parent_id == t->id) {
+                display_subtask_row(&tasks[j]);
+                printed[j] = 1;
+            }
+        }
     }
 
+    /* Pass 2: any subtasks whose parent didn't get printed (defensive). */
+    for (int i = 0; i < count; i++) {
+        if (!printed[i]) {
+            display_task_row(&tasks[i]);
+        }
+    }
+
+    free(printed);
+
     printf("\n  %s%d task(s)%s\n\n", clr(CLR_DIM), count, rst);
+}
+
+/* ── Subtask list under 'show' ──────────────────────────────── */
+
+void display_subtask_list(const task_t *children, int count)
+{
+    if (count == 0) {
+        return;
+    }
+    const char *rst = clr(CLR_RESET);
+    printf("  %sSubtasks (%d):%s\n", clr(CLR_BOLD), count, rst);
+    for (int i = 0; i < count; i++) {
+        display_subtask_row(&children[i]);
+    }
+    printf("\n");
 }
 
 /* ── Statistics ──────────────────────────────────────────────── */

@@ -38,7 +38,7 @@ static char *col_text_dup(sqlite3_stmt *stmt, int col)
 
 /* Populate a task_t from the current row of a SELECT * style statement.
  * Column order must match: id, title, description, type, priority, status,
- *                          scope, due_date, created_at, updated_at */
+ *                          scope, due_date, created_at, updated_at, parent_id */
 static void row_to_task(sqlite3_stmt *stmt, task_t *task)
 {
     task->id = sqlite3_column_int64(stmt, 0);
@@ -51,6 +51,8 @@ static void row_to_task(sqlite3_stmt *stmt, task_t *task)
     task->due_date = col_text_dup(stmt, 7);
     task->created_at = col_text_dup(stmt, 8);
     task->updated_at = col_text_dup(stmt, 9);
+    task->parent_id =
+        sqlite3_column_type(stmt, 10) == SQLITE_NULL ? 0 : sqlite3_column_int64(stmt, 10);
 }
 
 /* ── Open / Close ────────────────────────────────────────────── */
@@ -114,9 +116,9 @@ todoc_err_t db_init_schema(void)
 
 todoc_err_t db_task_insert(const task_t *task, int64_t *out_id)
 {
-    const char *sql =
-        "INSERT INTO tasks (title, description, type, priority, status, scope, due_date) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?);";
+    const char *sql = "INSERT INTO tasks (title, description, type, priority, status, scope, "
+                      "due_date, parent_id) "
+                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
 
     sqlite3_stmt *stmt = NULL;
     int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
@@ -143,6 +145,11 @@ todoc_err_t db_task_insert(const task_t *task, int64_t *out_id)
     } else {
         sqlite3_bind_null(stmt, 7);
     }
+    if (task->parent_id > 0) {
+        sqlite3_bind_int64(stmt, 8, task->parent_id);
+    } else {
+        sqlite3_bind_null(stmt, 8);
+    }
 
     rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
@@ -162,7 +169,7 @@ todoc_err_t db_task_insert(const task_t *task, int64_t *out_id)
 todoc_err_t db_task_get(int64_t id, task_t *out_task)
 {
     const char *sql = "SELECT id, title, description, type, priority, status, "
-                      "       scope, due_date, created_at, updated_at "
+                      "       scope, due_date, created_at, updated_at, parent_id "
                       "FROM tasks WHERE id = ?;";
 
     sqlite3_stmt *stmt = NULL;
@@ -193,7 +200,7 @@ todoc_err_t db_task_get(int64_t id, task_t *out_task)
 todoc_err_t db_task_update(const task_t *task)
 {
     const char *sql = "UPDATE tasks SET title=?, description=?, type=?, priority=?, "
-                      "status=?, scope=?, due_date=? WHERE id=?;";
+                      "status=?, scope=?, due_date=?, parent_id=? WHERE id=?;";
 
     sqlite3_stmt *stmt = NULL;
     int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
@@ -220,7 +227,12 @@ todoc_err_t db_task_update(const task_t *task)
     } else {
         sqlite3_bind_null(stmt, 7);
     }
-    sqlite3_bind_int64(stmt, 8, task->id);
+    if (task->parent_id > 0) {
+        sqlite3_bind_int64(stmt, 8, task->parent_id);
+    } else {
+        sqlite3_bind_null(stmt, 8);
+    }
+    sqlite3_bind_int64(stmt, 9, task->id);
 
     rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
@@ -276,14 +288,14 @@ todoc_err_t db_task_list(const task_filter_t *filter, task_t **out_tasks, int *o
     if (filter && filter->project) {
         sql_len = snprintf(sql, sizeof(sql),
                            "SELECT t.id, t.title, t.description, t.type, t.priority, t.status, "
-                           "       t.scope, t.due_date, t.created_at, t.updated_at "
+                           "       t.scope, t.due_date, t.created_at, t.updated_at, t.parent_id "
                            "FROM tasks t "
                            "INNER JOIN task_projects tp ON t.id = tp.task_id "
                            "INNER JOIN projects p ON tp.project_id = p.id");
     } else {
         sql_len = snprintf(sql, sizeof(sql),
                            "SELECT t.id, t.title, t.description, t.type, t.priority, t.status, "
-                           "       t.scope, t.due_date, t.created_at, t.updated_at "
+                           "       t.scope, t.due_date, t.created_at, t.updated_at, t.parent_id "
                            "FROM tasks t");
     }
 
@@ -425,6 +437,159 @@ todoc_err_t db_task_set_status(int64_t id, status_t status)
 
     if (sqlite3_changes(g_db) == 0) {
         return TODOC_ERR_NOT_FOUND;
+    }
+    return TODOC_OK;
+}
+
+/* ── Subtasks ────────────────────────────────────────────────── */
+
+todoc_err_t db_task_get_children(int64_t parent_id, task_t **out_children, int *out_count)
+{
+    *out_children = NULL;
+    *out_count = 0;
+
+    const char *sql = "SELECT id, title, description, type, priority, status, "
+                      "       scope, due_date, created_at, updated_at, parent_id "
+                      "FROM tasks WHERE parent_id = ? "
+                      "ORDER BY priority ASC, created_at DESC;";
+
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        return TODOC_ERR_DB;
+    }
+    sqlite3_bind_int64(stmt, 1, parent_id);
+
+    int capacity = 8;
+    task_t *tasks = todoc_calloc((size_t)capacity, sizeof(task_t));
+    int count = 0;
+
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        if (count >= capacity) {
+            capacity *= 2;
+            tasks = todoc_realloc(tasks, (size_t)capacity * sizeof(task_t));
+            memset(&tasks[count], 0, (size_t)(capacity - count) * sizeof(task_t));
+        }
+        row_to_task(stmt, &tasks[count]);
+        count++;
+    }
+
+    sqlite3_finalize(stmt);
+
+    if (rc != SQLITE_DONE) {
+        db_task_list_free(tasks, count);
+        return TODOC_ERR_DB;
+    }
+
+    *out_children = tasks;
+    *out_count = count;
+    return TODOC_OK;
+}
+
+int db_task_count_open_children(int64_t parent_id)
+{
+    const char *sql = "SELECT COUNT(*) FROM tasks "
+                      "WHERE parent_id = ? "
+                      "AND status NOT IN (?, ?, ?);";
+
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        return -1;
+    }
+    sqlite3_bind_int64(stmt, 1, parent_id);
+    sqlite3_bind_int(stmt, 2, (int)STATUS_DONE);
+    sqlite3_bind_int(stmt, 3, (int)STATUS_CANCELLED);
+    sqlite3_bind_int(stmt, 4, (int)STATUS_ABANDONED);
+
+    int n = -1;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        n = sqlite3_column_int(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    return n;
+}
+
+todoc_err_t db_task_set_parent(int64_t id, int64_t parent_id)
+{
+    const char *sql = "UPDATE tasks SET parent_id = ? WHERE id = ?;";
+
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        return TODOC_ERR_DB;
+    }
+
+    if (parent_id > 0) {
+        sqlite3_bind_int64(stmt, 1, parent_id);
+    } else {
+        sqlite3_bind_null(stmt, 1);
+    }
+    sqlite3_bind_int64(stmt, 2, id);
+
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    if (rc != SQLITE_DONE) {
+        return TODOC_ERR_DB;
+    }
+    if (sqlite3_changes(g_db) == 0) {
+        return TODOC_ERR_NOT_FOUND;
+    }
+    return TODOC_OK;
+}
+
+todoc_err_t db_task_set_projects(int64_t task_id, const int64_t *project_ids, int n)
+{
+    char *err_msg = NULL;
+    int rc = sqlite3_exec(g_db, "BEGIN;", NULL, NULL, &err_msg);
+    if (rc != SQLITE_OK) {
+        sqlite3_free(err_msg);
+        return TODOC_ERR_DB;
+    }
+
+    /* Wipe existing assignments */
+    sqlite3_stmt *del_stmt = NULL;
+    if (sqlite3_prepare_v2(g_db, "DELETE FROM task_projects WHERE task_id = ?;", -1, &del_stmt,
+                           NULL) != SQLITE_OK) {
+        sqlite3_exec(g_db, "ROLLBACK;", NULL, NULL, NULL);
+        return TODOC_ERR_DB;
+    }
+    sqlite3_bind_int64(del_stmt, 1, task_id);
+    if (sqlite3_step(del_stmt) != SQLITE_DONE) {
+        sqlite3_finalize(del_stmt);
+        sqlite3_exec(g_db, "ROLLBACK;", NULL, NULL, NULL);
+        return TODOC_ERR_DB;
+    }
+    sqlite3_finalize(del_stmt);
+
+    /* Insert the new ones */
+    if (project_ids && n > 0) {
+        sqlite3_stmt *ins_stmt = NULL;
+        if (sqlite3_prepare_v2(g_db,
+                               "INSERT OR IGNORE INTO task_projects (task_id, project_id) "
+                               "VALUES (?, ?);",
+                               -1, &ins_stmt, NULL) != SQLITE_OK) {
+            sqlite3_exec(g_db, "ROLLBACK;", NULL, NULL, NULL);
+            return TODOC_ERR_DB;
+        }
+        for (int i = 0; i < n; i++) {
+            sqlite3_reset(ins_stmt);
+            sqlite3_bind_int64(ins_stmt, 1, task_id);
+            sqlite3_bind_int64(ins_stmt, 2, project_ids[i]);
+            if (sqlite3_step(ins_stmt) != SQLITE_DONE) {
+                sqlite3_finalize(ins_stmt);
+                sqlite3_exec(g_db, "ROLLBACK;", NULL, NULL, NULL);
+                return TODOC_ERR_DB;
+            }
+        }
+        sqlite3_finalize(ins_stmt);
+    }
+
+    rc = sqlite3_exec(g_db, "COMMIT;", NULL, NULL, &err_msg);
+    if (rc != SQLITE_OK) {
+        sqlite3_free(err_msg);
+        return TODOC_ERR_DB;
     }
     return TODOC_OK;
 }

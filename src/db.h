@@ -44,6 +44,24 @@ void db_task_list_free(task_t *tasks, int count);
 /* Shortcut: set only the status of a task */
 todoc_err_t db_task_set_status(int64_t id, status_t status);
 
+/* ── Subtasks ────────────────────────────────────────────────── */
+
+/* Fetch all direct children of a task. Caller must call
+ * db_task_list_free(*out_children, *out_count) */
+todoc_err_t db_task_get_children(int64_t parent_id, task_t **out_children, int *out_count);
+
+/* Count children of a task that are NOT in a terminal status
+ * (done, cancelled, abandoned). Returns -1 on error. */
+int db_task_count_open_children(int64_t parent_id);
+
+/* Set or clear a task's parent. Pass 0 to make a task top-level. */
+todoc_err_t db_task_set_parent(int64_t id, int64_t parent_id);
+
+/* Replace a task's project assignments with exactly the projects
+ * in project_ids[0..n-1]. Pass project_ids=NULL/n=0 to remove all
+ * assignments. Atomic — uses a transaction so list is all-or-nothing. */
+todoc_err_t db_task_set_projects(int64_t task_id, const int64_t *project_ids, int n);
+
 /* ── Statistics ──────────────────────────────────────────────── */
 
 /* Pass project_name=NULL for global stats, or a project name for scoped stats */

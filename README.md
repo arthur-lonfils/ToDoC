@@ -13,6 +13,10 @@ A fast, full-featured command-line task manager written in C. SQLite-backed with
 - **Projects** for grouping tasks, with an active-project context that
   scopes `list`, `stats`, and `export` by default
 - Many-to-many task ↔ project relationships
+- **Subtasks** (one nesting level) with parent-done validation, tree
+  display, and an `abandoned` terminal status alongside `cancelled`
+- **`move`** command to swap a task's project assignments in one step
+  (parents move with all their children)
 - Filtered views by any attribute combination
 - Export to CSV or JSON
 - Color-coded terminal output (respects `NO_COLOR`)
@@ -158,13 +162,61 @@ todoc rm-project auth                            # tasks survive, links removed
 
 Project lifecycle statuses: `active`, `completed`, `archived`.
 
+## Subtasks
+
+Tasks support a single level of subtasks. Use `--sub <parent-id>` when
+creating a task (or via `edit`) to attach it to a parent.
+
+```bash
+todoc add "Big feature" --type feature --priority high
+# → Task #42 created.
+todoc add "Reproduce on staging" --sub 42
+todoc add "Write integration test" --sub 42
+
+todoc list                     # tree view: parent + indented children
+todoc show 42                  # detail + children list
+```
+
+A parent can only be marked done once **every** child is in a terminal
+status (`done`, `cancelled`, or `abandoned`):
+
+```bash
+todoc done 42                  # ✗ "has 2 open subtask(s)..."
+todoc edit 43 --status abandoned
+todoc done 44
+todoc done 42                  # ✓
+```
+
+The new `abandoned` status sits next to `cancelled` — both unblock
+parent completion. Deleting a parent (`todoc rm`) does **not** delete
+its children: they are promoted to top-level tasks.
+
+To promote a subtask manually:
+
+```bash
+todoc edit 43 --sub none       # detach from parent
+```
+
+## Move
+
+`assign` is additive (a task can belong to many projects). `move`
+**replaces** the task's project assignments with exactly the target,
+and cascades to all of the task's children atomically:
+
+```bash
+todoc move 42 backend          # task 42 (and any subtasks) → backend
+todoc move 42 --global         # remove all project links from 42 + children
+```
+
+Subtasks cannot be moved directly — move the parent instead.
+
 ## Task Attributes
 
 | Attribute  | Values                                          |
 |------------|--------------------------------------------------|
 | **Type**     | `bug`, `feature`, `chore`, `idea`               |
 | **Priority** | `critical`, `high`, `medium`, `low`             |
-| **Status**   | `todo`, `in-progress`, `done`, `blocked`, `cancelled` |
+| **Status**   | `todo`, `in-progress`, `done`, `blocked`, `cancelled`, `abandoned` |
 | **Scope**    | Any string tag (e.g., `auth`, `ui`, `backend`)  |
 | **Due date** | `YYYY-MM-DD` format                             |
 

@@ -40,6 +40,7 @@ static const cmd_entry_t cmd_table[] = {
     {"--version", CMD_VERSION},
     {"-v", CMD_VERSION},
     {"update", CMD_UPDATE},
+    {"move", CMD_MOVE},
     {NULL, CMD_NONE},
 };
 
@@ -268,6 +269,25 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
             out->project_color = todoc_strdup(val);
         } else if (strcmp(arg, "--clear") == 0) {
             out->clear = 1;
+        } else if (strcmp(arg, "--sub") == 0) {
+            const char *val = consume_value(argc, argv, &i, arg);
+            if (!val) {
+                return TODOC_ERR_INVALID;
+            }
+            /* 'none' means "remove parent" (only meaningful for edit) */
+            if (strcmp(val, "none") == 0 || strcmp(val, "0") == 0) {
+                out->parent_id = -1;
+                out->parent_set = 1;
+            } else {
+                int64_t pid = 0;
+                if (parse_task_id(val, &pid) != 0) {
+                    return TODOC_ERR_INVALID;
+                }
+                out->parent_id = pid;
+                out->parent_set = 1;
+            }
+        } else if (strcmp(arg, "--global") == 0) {
+            out->global = 1;
         } else if (!is_flag(arg)) {
             /* Positional argument handling depends on command */
             if (out->command == CMD_ADD && !out->title) {
@@ -283,12 +303,14 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
                         out->command == CMD_USE) &&
                        !out->project_name) {
                 out->project_name = todoc_strdup(arg);
-            } else if ((out->command == CMD_ASSIGN || out->command == CMD_UNASSIGN) &&
+            } else if ((out->command == CMD_ASSIGN || out->command == CMD_UNASSIGN ||
+                        out->command == CMD_MOVE) &&
                        out->task_id == 0) {
                 if (parse_task_id(arg, &out->task_id) != 0) {
                     return TODOC_ERR_INVALID;
                 }
-            } else if ((out->command == CMD_ASSIGN || out->command == CMD_UNASSIGN) &&
+            } else if ((out->command == CMD_ASSIGN || out->command == CMD_UNASSIGN ||
+                        out->command == CMD_MOVE) &&
                        !out->project_name) {
                 out->project_name = todoc_strdup(arg);
             } else {
@@ -390,6 +412,8 @@ static void print_overview(void)
            "  use --clear                Clear active project\n"
            "  assign <id> <project>      Assign task to project\n"
            "  unassign <id> <project>    Remove task from project\n"
+           "  move <id> <project>        Replace task's project assignments\n"
+           "  move <id> --global         Remove all project assignments\n"
            "\n"
            "Other:\n"
            "  help [topic]               Show help (run 'todoc help help' for topics)\n"
@@ -430,15 +454,24 @@ static void print_task_topic(void)
            "  --desc <text>              Task description\n"
            "  --type, -t <type>          bug, feature, chore, idea\n"
            "  --priority, -p <priority>  critical, high, medium, low\n"
-           "  --status, -s <status>      todo, in-progress, done, blocked, cancelled\n"
+           "  --status, -s <status>      todo, in-progress, done, blocked, cancelled, abandoned\n"
            "  --scope <tag>              Scope tag\n"
            "  --due <YYYY-MM-DD>         Due date\n"
+           "  --sub <parent-id>          Make this task a subtask of <parent-id>\n"
+           "  --sub none                 (edit only) Promote a subtask to top-level\n"
            "  --limit <n>                Limit list results\n"
            "  --project, -P <name>       Filter by or assign to project\n"
            "  --all                      Show all tasks (bypass active project)\n"
            "\n"
+           "Subtasks:\n"
+           "  Tasks support a single level of subtasks. A parent can only be\n"
+           "  marked done once every child is in a terminal status (done,\n"
+           "  cancelled, or abandoned). Deleting a parent promotes its\n"
+           "  children to top-level tasks.\n"
+           "\n"
            "Examples:\n"
            "  todoc add \"Fix login bug\" --type bug --priority high\n"
+           "  todoc add \"Reproduce on staging\" --sub 3\n"
            "  todoc list --status todo --priority critical\n"
            "  todoc edit 3 --priority low --due 2026-04-15\n"
            "  todoc done 3\n"
@@ -464,12 +497,21 @@ static void print_project_topic(void)
            "  use --clear                Clear active project\n"
            "  assign <id> <project>      Link task to project\n"
            "  unassign <id> <project>    Remove task from project\n"
+           "  move <id> <project>        Replace a task's project assignments\n"
+           "  move <id> --global         Remove all project assignments\n"
+           "\n"
+           "Move vs assign:\n"
+           "  'assign' is additive — a task may belong to several projects.\n"
+           "  'move' replaces the existing assignments with exactly the\n"
+           "  target. Moving a parent task moves its children too. You\n"
+           "  cannot move a subtask directly — move its parent instead.\n"
            "\n"
            "Options:\n"
            "  --desc <text>              Project description\n"
            "  --color <tag>              Color/label tag\n"
            "  --status, -s <status>      active, completed, archived\n"
            "  --due <YYYY-MM-DD>         Project due date\n"
+           "  --global                   (move only) Remove all project links\n"
            "\n"
            "Examples:\n"
            "  todoc add-project auth --desc \"Auth system\" --color blue --due 2026-06-01\n"
@@ -601,6 +643,14 @@ static int print_command_topic(const char *cmd)
                "A task may belong to multiple projects. Re-assigning is a no-op.\n");
     } else if (strcmp(cmd, "unassign") == 0) {
         printf("todoc unassign <id> <project> — Remove a task from a project\n");
+    } else if (strcmp(cmd, "move") == 0) {
+        printf("todoc move <id> <project> — Replace a task's project assignments\n"
+               "todoc move <id> --global — Remove all project assignments\n"
+               "\n"
+               "Unlike 'assign' (additive), 'move' replaces existing project\n"
+               "links with exactly the target. Moving a parent task atomically\n"
+               "moves all its children to the same project. Subtasks cannot\n"
+               "be moved directly — move the parent instead.\n");
     } else if (strcmp(cmd, "help") == 0) {
         printf("todoc help [topic] — Show help\n"
                "\n"

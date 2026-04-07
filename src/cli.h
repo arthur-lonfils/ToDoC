@@ -32,6 +32,7 @@ typedef enum {
     CMD_HELP,
     CMD_VERSION,
     CMD_UPDATE,
+    CMD_MOVE,
 } command_t;
 
 /* ── Parsed CLI arguments ────────────────────────────────────── */
@@ -71,6 +72,14 @@ typedef struct {
 
     /* For 'help <topic>' */
     char *help_topic;
+
+    /* For subtasks: --sub <parent-id>. parent_id < 0 means "make orphan"
+     * (used by 'todoc edit <id> --sub none'), 0 means unspecified. */
+    int64_t parent_id;
+    int parent_set; /* 1 if --sub was passed (so we can distinguish 0/unset) */
+
+    /* For 'move': --global removes all project assignments */
+    int global;
 } cli_args_t;
 
 /* Parse argc/argv into a cli_args_t. Returns TODOC_OK or TODOC_ERR_INVALID.

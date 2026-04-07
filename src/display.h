@@ -11,11 +11,19 @@ void display_init(void);
 /* Compact one-line row for list view */
 void display_task_row(const task_t *task);
 
+/* Compact one-line row, indented under a parent (used in trees). */
+void display_subtask_row(const task_t *task);
+
 /* Full detail view for show command */
 void display_task_detail(const task_t *task);
 
-/* Table header + rows for list command */
+/* Table header + rows for list command. Top-level tasks are listed
+ * normally; their children are indented underneath. Orphan children
+ * (whose parent is not in the slice) are also rendered as top-level. */
 void display_task_list(const task_t *tasks, int count);
+
+/* Render a labelled subtask list under a parent (used by 'show'). */
+void display_subtask_list(const task_t *children, int count);
 
 /* Statistics summary */
 void display_stats(const task_stats_t *stats);
