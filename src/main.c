@@ -74,7 +74,7 @@ int main(int argc, char **argv)
 
     /* All other commands need the database open */
     if (db_open() != TODOC_OK) {
-        display_error("Failed to open database: %s", db_last_error());
+        output_error("dispatch", "db_error", "Failed to open database: %s", db_last_error());
         display_info("Run 'todoc init' to create the database.");
         cli_args_free(&args);
         return 1;
@@ -111,7 +111,7 @@ int main(int argc, char **argv)
     if (handler) {
         err = handler(&args);
     } else {
-        display_error("Internal error: unhandled command.");
+        output_error("dispatch", "internal", "Internal error: unhandled command.");
         err = TODOC_ERR_INVALID;
     }
 

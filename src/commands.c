@@ -310,7 +310,7 @@ todoc_err_t cmd_edit(const cli_args_t *args)
             task.parent_id = 0;
         } else {
             if (args->parent_id == args->task_id) {
-                display_error("A task cannot be its own parent.");
+                output_error("edit", "invalid_input", "A task cannot be its own parent.");
                 task_free(&task);
                 return TODOC_ERR_INVALID;
             }
