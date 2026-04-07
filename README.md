@@ -27,6 +27,8 @@ A fast, full-featured command-line task manager written in C. SQLite-backed with
 - **Agent mode** — `todoc mode ai` flips todoc into a structured-JSON
   output mode for LLM-driven workflows; `--json` is the one-shot
   equivalent
+- **Tab completion** — embedded bash, zsh, and fish completion scripts
+  with a one-command auto-installer (`todoc completions install`)
 - Filtered views by any attribute combination
 - Export to CSV or JSON
 - Color-coded terminal output (respects `NO_COLOR`)
@@ -163,6 +165,37 @@ For a system-wide install (`/usr/local/bin/todoc`) re-run with sudo —
 todoc will tell you when permission is denied. Self-removal is safe
 on Linux: the inode survives until the running process exits, so the
 success message still prints.
+
+### Tab completion
+
+todoc ships embedded shell-completion scripts for **bash**, **zsh**,
+and **fish**, with a one-command auto-installer that detects your
+shell and drops the file in the right place:
+
+```bash
+todoc completions install        # detects $SHELL and installs
+todoc completions uninstall      # remove the installed file
+```
+
+Or print the script and pipe it wherever you like:
+
+```bash
+todoc completions bash > ~/.local/share/bash-completion/completions/todoc
+todoc completions zsh  > ~/.zfunc/_todoc           # add ~/.zfunc to fpath
+todoc completions fish > ~/.config/fish/completions/todoc.fish
+```
+
+Tab completion knows:
+
+- **Command names** (`todoc <Tab>` → `add list show edit ...`)
+- **Flags per command** (`todoc add --<Tab>` → `--type --priority ...`)
+- **Enum values** for `--type`, `--priority`, `--status`, `--format`
+- **Live data** from your todoc database — project names, label
+  names, task IDs (`todoc use <Tab>`, `todoc show <Tab>`,
+  `todoc label 42 <Tab>`, `todoc list --label <Tab>`, …)
+
+The dynamic lookups go through a `todoc complete <kind>` plumbing
+subcommand that the completion script calls behind the scenes.
 
 ### Build from source
 

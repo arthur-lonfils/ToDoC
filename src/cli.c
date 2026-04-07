@@ -49,6 +49,8 @@ static const cmd_entry_t cmd_table[] = {
     {"changelog", CMD_CHANGELOG},
     {"mode", CMD_MODE},
     {"uninstall", CMD_UNINSTALL},
+    {"completions", CMD_COMPLETIONS},
+    {"complete", CMD_COMPLETE},
     {NULL, CMD_NONE},
 };
 
@@ -368,6 +370,9 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
                 out->changelog_version = todoc_strdup(arg);
             } else if (out->command == CMD_MODE && !out->mode_target) {
                 out->mode_target = todoc_strdup(arg);
+            } else if ((out->command == CMD_COMPLETIONS || out->command == CMD_COMPLETE) &&
+                       !out->completion_target) {
+                out->completion_target = todoc_strdup(arg);
             } else {
                 fprintf(stderr, "todoc: unexpected argument '%s'\n", arg);
                 return TODOC_ERR_INVALID;
@@ -439,6 +444,7 @@ void cli_args_free(cli_args_t *args)
     free(args->changelog_version);
     free(args->changelog_since);
     free(args->mode_target);
+    free(args->completion_target);
     memset(args, 0, sizeof(*args));
 }
 
@@ -490,6 +496,7 @@ static void print_overview(void)
            "  changelog [version]        Show release notes (--all, --since, --list)\n"
            "  mode [ai|user]             Switch output mode (JSON for LLM agents)\n"
            "  uninstall                  Remove the todoc binary (--purge wipes data)\n"
+           "  completions <shell>        Print or install shell tab-completion scripts\n"
            "\n"
            "Global flags:\n"
            "  --json, -j                 One-shot ai mode for the next command\n"
@@ -779,6 +786,43 @@ static int print_command_topic(const char *cmd)
                "The label is auto-created if it does not already exist.\n");
     } else if (strcmp(cmd, "unlabel") == 0) {
         printf("todoc unlabel <id> <label> — Detach a label from a task\n");
+    } else if (strcmp(cmd, "completions") == 0) {
+        printf("todoc completions <shell|action> — Shell tab-completion scripts\n"
+               "\n"
+               "todoc ships embedded completion scripts for bash, zsh, and fish.\n"
+               "Print one to stdout, or have todoc install it into the right place\n"
+               "for your shell automatically.\n"
+               "\n"
+               "Usage:\n"
+               "  todoc completions bash       Print the bash script to stdout\n"
+               "  todoc completions zsh        Print the zsh script\n"
+               "  todoc completions fish       Print the fish script\n"
+               "  todoc completions install    Auto-detect $SHELL and install\n"
+               "  todoc completions uninstall  Remove the auto-installed file\n"
+               "\n"
+               "Manual install (single line in your shell rc file):\n"
+               "  bash:  eval \"$(todoc completions bash)\"\n"
+               "  zsh:   eval \"$(todoc completions zsh)\"   (requires bashcompinit\n"
+               "         or use the 'install' subcommand instead)\n"
+               "  fish:  todoc completions fish | source\n"
+               "\n"
+               "After completion is loaded, Tab will complete commands, flags,\n"
+               "enum values (--type, --priority, --status), and live data from\n"
+               "your todoc database (project names, label names, task IDs).\n");
+    } else if (strcmp(cmd, "complete") == 0) {
+        printf("todoc complete <kind> — Plumbing for shell completion\n"
+               "\n"
+               "Internal subcommand used by the embedded completion scripts to\n"
+               "fetch dynamic data. You should not need to call this directly.\n"
+               "\n"
+               "Kinds:\n"
+               "  commands     All top-level command names\n"
+               "  topics       help topic names (task, project, label, ...)\n"
+               "  projects     Project names from the DB\n"
+               "  labels       Label names from the DB\n"
+               "  task-ids     All task IDs from the DB\n"
+               "\n"
+               "Output is one entry per line on stdout, suitable for compgen.\n");
     } else if (strcmp(cmd, "uninstall") == 0) {
         printf("todoc uninstall — Remove the todoc binary\n"
                "\n"

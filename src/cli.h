@@ -41,6 +41,8 @@ typedef enum {
     CMD_CHANGELOG,
     CMD_MODE,
     CMD_UNINSTALL,
+    CMD_COMPLETIONS,
+    CMD_COMPLETE,
 } command_t;
 
 /* ── Parsed CLI arguments ────────────────────────────────────── */
@@ -115,6 +117,10 @@ typedef struct {
      *   purge: --purge also removes ~/.todoc/ (data + backups) */
     int yes;
     int purge;
+
+    /* For 'completions <shell>' (bash|zsh|fish|install|uninstall)
+     * and  'complete <kind>'    (commands|projects|labels|task-ids|topics) */
+    char *completion_target;
 } cli_args_t;
 
 /* Parse argc/argv into a cli_args_t. Returns TODOC_OK or TODOC_ERR_INVALID.

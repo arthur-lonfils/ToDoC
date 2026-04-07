@@ -668,6 +668,82 @@ fi
 rm -f "$HOME/_un_out"
 echo ""
 
+# ── 8n. Completions ────────────────────────────────────────────
+
+echo "Completions:"
+
+# The uninstall block above wipes ~/.todoc/, so we need a fresh DB
+# before the completion fixtures can be inserted.
+assert_ok      "fixture: re-init DB after uninstall block"        init
+assert_ok      "fixture: add a task for task-ids completion"      add "Completion fixture task"
+
+# Static lists
+assert_output  "complete commands lists init"   "init"            complete commands
+assert_output  "complete commands lists add"    "add"             complete commands
+assert_output  "complete topics lists task"     "task"            complete topics
+
+# Dynamic lists need DB content. Add some fixtures.
+assert_ok      "fixture: add-project alpha"                       add-project alpha
+assert_ok      "fixture: add-project beta"                        add-project beta
+assert_ok      "fixture: add-label urgent"                        add-label urgent
+assert_output  "complete projects lists alpha"  "alpha"           complete projects
+assert_output  "complete projects lists beta"   "beta"            complete projects
+assert_output  "complete labels lists urgent"   "urgent"          complete labels
+assert_output  "complete task-ids lists numbers" "1"              complete task-ids
+assert_fail    "complete bogus kind fails"                        complete bogus
+
+# Embedded scripts can be printed
+assert_output  "completions bash prints script" "_todoc"          completions bash
+assert_output  "completions zsh prints script"  "compdef todoc"   completions zsh
+assert_output  "completions fish prints script" "complete -c todoc" completions fish
+assert_fail    "completions unknown shell fails"                  completions tcsh
+
+# Help block
+assert_output  "help completions"               "Shell tab-completion" help completions
+assert_output  "help complete plumbing"         "Plumbing"        help complete
+
+# Auto-install: detects $SHELL, writes a file, then we uninstall it
+SAVED_SHELL=${SHELL:-}
+SHELL=/usr/bin/bash assert_ok    "completions install (bash)"     completions install
+if [ -f "$HOME/.local/share/bash-completion/completions/todoc" ]; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  bash completion file created\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  bash completion file not created\n"
+fi
+SHELL=/usr/bin/bash assert_ok    "completions uninstall (bash)"   completions uninstall
+if [ ! -f "$HOME/.local/share/bash-completion/completions/todoc" ]; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  bash completion file removed\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  bash completion file still present\n"
+fi
+
+# Auto-install for zsh and fish in their respective dirs
+SHELL=/usr/bin/zsh assert_ok     "completions install (zsh)"      completions install
+[ -f "$HOME/.zfunc/_todoc" ] && PASS=$((PASS+1)) && \
+    printf "  \033[32mPASS\033[0m  zsh completion file created\n" || \
+    { FAIL=$((FAIL+1)); printf "  \033[31mFAIL\033[0m  zsh completion file not created\n"; }
+
+SHELL=/usr/bin/fish assert_ok    "completions install (fish)"     completions install
+[ -f "$HOME/.config/fish/completions/todoc.fish" ] && PASS=$((PASS+1)) && \
+    printf "  \033[32mPASS\033[0m  fish completion file created\n" || \
+    { FAIL=$((FAIL+1)); printf "  \033[31mFAIL\033[0m  fish completion file not created\n"; }
+
+# Unknown shell
+SHELL=/usr/bin/tcsh assert_fail  "completions install (tcsh)"     completions install
+
+# Restore env
+if [ -n "$SAVED_SHELL" ]; then
+    export SHELL=$SAVED_SHELL
+fi
+
+# Clean up the auto-installed files so they don't bleed into other tests
+rm -rf "$HOME/.local/share/bash-completion" "$HOME/.zfunc" "$HOME/.config/fish"
+echo ""
+
 # ── 9. Help / Version ───────���───────────────────────────────────
 
 echo "Help & Version:"
