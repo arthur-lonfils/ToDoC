@@ -22,4 +22,6 @@ todoc_err_t cmd_use(const cli_args_t *args);
 todoc_err_t cmd_assign(const cli_args_t *args);
 todoc_err_t cmd_unassign(const cli_args_t *args);
 
+todoc_err_t cmd_update(const cli_args_t *args);
+
 #endif

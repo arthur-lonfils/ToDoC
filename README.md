@@ -41,13 +41,34 @@ Pin a specific version:
 curl -sSL https://raw.githubusercontent.com/arthur-lonfils/ToDoC/main/scripts/install.sh | sh -s v0.4.0
 ```
 
+The installer also backs up your existing `~/.todoc/todoc.db` (if any)
+and runs `todoc init` to apply pending schema migrations, so it is
+safe to use both for first install and for upgrades.
+
 ### Update
 
-Re-running the installer updates todoc to the latest release:
+If todoc is already installed, just run:
+
+```bash
+todoc update
+```
+
+This shells out to the same install script and performs the full
+backup → download → migrate flow. The backup path is printed at the
+end so you can roll back with:
+
+```bash
+cp ~/.todoc/todoc.db.backup-<timestamp> ~/.todoc/todoc.db
+```
+
+Equivalent one-liner (works even before todoc is installed):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/arthur-lonfils/ToDoC/main/scripts/install.sh | sh
 ```
+
+For a system-wide update, prepend `sudo` and `PREFIX=/usr/local`
+the same way as the install command above.
 
 ### Build from source
 
@@ -60,6 +81,9 @@ make install PREFIX=~/.local    # local, no sudo
 ```
 
 ### First run
+
+The installer runs `todoc init` for you. If you built from source, run
+it manually once:
 
 ```bash
 todoc init
