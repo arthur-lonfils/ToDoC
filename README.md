@@ -24,6 +24,9 @@ A fast, full-featured command-line task manager written in C. SQLite-backed with
 - **Update check** — quietly notices when a new release is available
   and warns once at the end of any command, with a louder message for
   major or breaking releases
+- **Agent mode** — `todoc mode ai` flips todoc into a structured-JSON
+  output mode for LLM-driven workflows; `--json` is the one-shot
+  equivalent
 - Filtered views by any attribute combination
 - Export to CSV or JSON
 - Color-coded terminal output (respects `NO_COLOR`)
@@ -101,6 +104,50 @@ breaking releases get a louder warning that points at
 
 ```bash
 export TODOC_NO_UPDATE_CHECK=1
+```
+
+### Agent mode
+
+LLM-driven agents that drive todoc as a tool can switch into a
+structured-output mode where every command emits a single JSON
+envelope on stdout (and a JSON error envelope on stderr if it fails).
+Colors, info messages, warnings, and the update-check notification
+are all suppressed in this mode — stdout is guaranteed to be exactly
+one parseable JSON object.
+
+```bash
+todoc mode ai            # switch persistently
+todoc mode               # show current mode (then 'ai')
+todoc mode user          # switch back to colored human output
+```
+
+The persistent mode lives in `~/.todoc/mode`. Two ways to override
+it without flipping the file:
+
+```bash
+TODOC_MODE=ai todoc list           # process scope
+todoc list --json                  # one-shot for one command
+```
+
+Resolution order (highest precedence first): `--json` flag, then
+`TODOC_MODE` env var, then `~/.todoc/mode`, then default `user`.
+
+A typical agent workflow:
+
+```bash
+export TODOC_MODE=ai
+todoc add "Fix login" --type bug --priority high
+# → {"schema":"todoc/v1","command":"add","ok":true,"data":{"task":{"id":42,...}}}
+todoc list | jq '.data.tasks[] | {id, title, status}'
+```
+
+Errors:
+
+```bash
+todoc show 9999
+# stderr: {"schema":"todoc/v1","command":"show","ok":false,
+#          "error":{"code":"not_found","message":"Task #9999 not found."}}
+# exit:   1
 ```
 
 ### Build from source

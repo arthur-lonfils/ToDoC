@@ -503,6 +503,77 @@ assert_output  "env var suppresses warning"        "task(s)"                    
 rm -f "$CACHE"
 echo ""
 
+# ── 8l. Mode / agent output ────────────────────────────────────
+
+echo "Mode / agent output:"
+
+# 'mode' (no arg) shows the current mode in plain text
+assert_output  "mode default is user"           "user"                          mode
+
+# Switch to ai mode persistently
+assert_ok      "mode set ai"                                                    mode ai
+# After switching, 'mode' shows ai inside a JSON envelope (because the
+# next process loads the file and resolves to ai at output_init time).
+assert_output  "mode reads back ai"             "\"mode\":\"ai\""               mode
+
+# In ai mode every command emits a JSON envelope on stdout
+assert_output  "ai list emits envelope"         "\"schema\":\"todoc/v1\""       list
+assert_output  "ai list has tasks key"          "\"tasks\":"                    list
+assert_output  "ai add returns task object"     "\"task\":"                     add "Json task" --type chore
+assert_output  "ai stats wraps stats"           "\"by_status\":"                stats
+
+# Errors in ai mode go to stderr as JSON. assert_output requires exit 0
+# but errors exit non-zero, so we hand-roll a substring check that
+# tolerates a non-zero exit.
+err_out=$(run show 999999 2>&1 || true)
+if echo "$err_out" | grep -q '"code":"not_found"'; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  ai not_found code in error envelope\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  ai not_found code in error envelope\n"
+    printf "        got: %s\n" "$err_out"
+fi
+if echo "$err_out" | grep -q '"command":"show"'; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  ai error envelope has command field\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  ai error envelope has command field\n"
+    printf "        got: %s\n" "$err_out"
+fi
+assert_fail    "ai unknown task exits non-zero"                                 show 999999
+
+# Switch back to user mode
+assert_ok      "back to user mode"                                              mode user
+assert_output  "user mode is default again"     "user"                          mode
+
+# --json flag works as a one-shot override even in user mode
+assert_output  "--json overrides for one cmd"   "\"schema\":\"todoc/v1\""       list --json
+# After the one-shot, persistent mode is unaffected
+assert_output  "user mode unaffected after"     "ID"                            list
+
+# TODOC_MODE env var (use `env` to inject the var into the subshell call)
+out=$(env TODOC_MODE=ai $TODOC list 2>&1)
+if echo "$out" | grep -q '"schema":"todoc/v1"'; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  TODOC_MODE env var triggers ai\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  TODOC_MODE env var triggers ai\n"
+    printf "        got: %s\n" "$out"
+fi
+
+# Update-check warning is suppressed in ai mode
+mkdir -p "$HOME/.todoc"
+printf 'last_check=%d\nlatest_version=99.99.99\nbreaking=0\n' "$(date +%s)" > "$HOME/.todoc/update_check"
+assert_no_warn "ai suppresses update warning"   "Major release"                 list --json
+rm -f "$HOME/.todoc/update_check"
+
+# Help for the new command
+assert_output  "help command mode"              "Switch output mode"            help mode
+echo ""
+
 # ── 9. Help / Version ───────���───────────────────────────────────
 
 echo "Help & Version:"

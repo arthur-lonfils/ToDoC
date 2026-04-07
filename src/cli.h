@@ -39,6 +39,7 @@ typedef enum {
     CMD_LABEL,
     CMD_UNLABEL,
     CMD_CHANGELOG,
+    CMD_MODE,
 } command_t;
 
 /* ── Parsed CLI arguments ────────────────────────────────────── */
@@ -101,6 +102,12 @@ typedef struct {
     char *changelog_version; /* positional X.Y.Z (or vX.Y.Z) */
     char *changelog_since;   /* --since X.Y.Z */
     int changelog_list;      /* --list flag */
+
+    /* For 'mode' command */
+    char *mode_target; /* positional: "ai" or "user", NULL = show */
+
+    /* For --json one-shot flag (forces ai mode for this invocation) */
+    int output_json;
 } cli_args_t;
 
 /* Parse argc/argv into a cli_args_t. Returns TODOC_OK or TODOC_ERR_INVALID.

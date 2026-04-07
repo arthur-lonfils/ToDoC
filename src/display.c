@@ -1,4 +1,5 @@
 #include "display.h"
+#include "output.h"
 #include "util.h"
 
 #include <stdarg.h>
@@ -33,6 +34,11 @@ void display_init(void)
         return;
     }
     g_use_color = isatty(STDOUT_FILENO);
+}
+
+void display_disable_color(void)
+{
+    g_use_color = 0;
 }
 
 static const char *clr(const char *code)
@@ -441,6 +447,9 @@ void display_error(const char *fmt, ...)
 
 void display_warn(const char *fmt, ...)
 {
+    if (output_is_ai()) {
+        return; /* hints are human-only; don't pollute the JSON envelope */
+    }
     va_list args;
     va_start(args, fmt);
     fprintf(stdout, "%s⚠%s ", clr(CLR_YELLOW), clr(CLR_RESET));
@@ -451,6 +460,9 @@ void display_warn(const char *fmt, ...)
 
 void display_info(const char *fmt, ...)
 {
+    if (output_is_ai()) {
+        return; /* hints are human-only; don't pollute the JSON envelope */
+    }
     va_list args;
     va_start(args, fmt);
     fprintf(stdout, "%s·%s ", clr(CLR_BLUE), clr(CLR_RESET));

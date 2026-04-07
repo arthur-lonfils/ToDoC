@@ -1,4 +1,5 @@
 #include "update_check.h"
+#include "output.h"
 #include "util.h"
 
 #include <fcntl.h>
@@ -40,12 +41,17 @@ static char *cache_path(void)
 static int command_is_noisy(command_t cmd)
 {
     return cmd == CMD_NONE || cmd == CMD_HELP || cmd == CMD_VERSION || cmd == CMD_UPDATE ||
-           cmd == CMD_CHANGELOG;
+           cmd == CMD_CHANGELOG || cmd == CMD_MODE;
 }
 
 int update_check_disabled(command_t cmd)
 {
     if (command_is_noisy(cmd)) {
+        return 1;
+    }
+    /* Agents don't want a free-floating update warning interleaved
+     * with their JSON envelope. Always silent in ai mode. */
+    if (output_is_ai()) {
         return 1;
     }
     const char *env = getenv("TODOC_NO_UPDATE_CHECK");
