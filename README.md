@@ -18,19 +18,47 @@ A fast, full-featured command-line task manager written in C. SQLite-backed with
 
 ## Install
 
+### Quick install (Linux x86_64)
+
+One-liner that downloads the latest release into `~/.local/bin`:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/arthur-lonfils/ToDoC/main/scripts/install.sh | sh
+```
+
+System-wide install:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/arthur-lonfils/ToDoC/main/scripts/install.sh | sudo PREFIX=/usr/local sh
+```
+
+Pin a specific version:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/arthur-lonfils/ToDoC/main/scripts/install.sh | sh -s v0.4.0
+```
+
+### Update
+
+Re-running the installer updates todoc to the latest release:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/arthur-lonfils/ToDoC/main/scripts/install.sh | sh
+```
+
+### Build from source
+
 **Requirements:** GCC (C11), libsqlite3-dev
 
 ```bash
-# Build
-make
+make                            # build
+sudo make install               # system-wide
+make install PREFIX=~/.local    # local, no sudo
+```
 
-# Install system-wide
-sudo make install
+### First run
 
-# Or install locally (no sudo)
-make install PREFIX=~/.local
-
-# Initialize the database
+```bash
 todoc init
 ```
 
@@ -117,7 +145,7 @@ src/
 
 sql/migrations/   Versioned SQL migration files
 hooks/            Git hook scripts
-scripts/          Release automation
+scripts/          Release automation, install/update script
 tests/            Automated test suite
 ```
 
