@@ -4,6 +4,12 @@ All notable changes to **todoc** are documented here.
 
 Format based on [Conventional Commits](https://conventionalcommits.org).
 
+## [0.8.0] — 2026-04-07
+
+### Features
+
+- **cli:** Add 'todoc uninstall' command(05626a2)
+
 ## [0.7.0] — 2026-04-07
 
 ### Bug Fixes
