@@ -106,9 +106,6 @@ typedef struct {
     char *changelog_since;   /* --since X.Y.Z */
     int changelog_list;      /* --list flag */
 
-    /* For 'mode' command */
-    char *mode_target; /* positional: "ai" or "user", NULL = show */
-
     /* For --json one-shot flag (forces ai mode for this invocation) */
     int output_json;
 

@@ -18,15 +18,28 @@
  * The mode is resolved once per process at output_init() time. The
  * resolution order is, highest precedence first:
  *
- *   1. --json flag (passed to output_init)
- *   2. TODOC_MODE env var (ai|user)
- *   3. ~/.todoc/mode file (ai|user)
+ *   1. --json flag (passed to output_init) — one-shot for this command
+ *   2. TODOC_MODE env var (ai|user) — process scope
+ *   3. Auto-detect: agent environment markers (CLAUDECODE,
+ *      CLAUDE_CODE_ENTRYPOINT, CLAUDE_PROJECT_DIR, CURSOR_TRACE_ID,
+ *      or the explicit TODOC_AGENT=1 opt-in) — agents flip
+ *      themselves automatically without leaking into other terminals
  *   4. default OUTPUT_MODE_USER
+ *
+ * There is intentionally no persistent file. Earlier versions stored
+ * the mode in ~/.todoc/mode, but that flipped every shell on the box
+ * the moment one agent enabled it. The legacy file is silently
+ * removed by output_init() if it still exists.
  */
 
 void output_init(int json_flag);
 output_mode_t output_get_mode(void);
 int output_is_ai(void);
+
+/* Returns a short, stable string describing why we resolved to the
+ * current mode — one of "json-flag", "env-var", "auto-detect:<var>",
+ * or "default". The pointer is a literal; do not free. */
+const char *output_mode_source(void);
 
 /* Tasks */
 void output_show_task(const task_t *t, const task_t *kids, int n_kids, const label_t *labels,
@@ -60,7 +73,7 @@ void output_moved(const task_t *t, const char *target, int n_kids, int to_global
 void output_active_project(const char *name, int cleared);
 void output_stats(const task_stats_t *s, const char *project_scope);
 void output_init_db(const char *db_path, int already_existed);
-void output_mode_status(output_mode_t mode, int just_set);
+void output_mode_status(output_mode_t mode, const char *source);
 void output_update_done(const char *current_version);
 void output_uninstalled(const char *binary_path, int data_purged, const char *data_path);
 

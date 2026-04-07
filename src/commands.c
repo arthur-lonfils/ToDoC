@@ -1198,26 +1198,12 @@ todoc_err_t cmd_changelog(const cli_args_t *args)
 
 todoc_err_t cmd_mode(const cli_args_t *args)
 {
-    if (args->mode_target) {
-        output_mode_t target;
-        if (strcmp(args->mode_target, "ai") == 0) {
-            target = OUTPUT_MODE_AI;
-        } else if (strcmp(args->mode_target, "user") == 0) {
-            target = OUTPUT_MODE_USER;
-        } else {
-            output_error("mode", "invalid_input", "Unknown mode '%s' (expected: ai, user).",
-                         args->mode_target);
-            return TODOC_ERR_INVALID;
-        }
-        if (todoc_set_mode(target) != 0) {
-            output_error("mode", "io_error", "Failed to write ~/.todoc/mode.");
-            return TODOC_ERR_IO;
-        }
-        output_mode_status(target, 1);
-        return TODOC_OK;
-    }
-    /* No argument: print current mode (resolved at output_init time) */
-    output_mode_status(output_get_mode(), 0);
+    (void)args;
+    /* 'mode' is a read-only diagnostic — there is no persistent setter
+     * (see src/output.h for the resolution order). It just reports the
+     * mode that output_init() resolved for this process and where it
+     * came from, so users and agents can verify their setup. */
+    output_mode_status(output_get_mode(), output_mode_source());
     return TODOC_OK;
 }
 

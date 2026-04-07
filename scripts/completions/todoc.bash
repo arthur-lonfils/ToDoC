@@ -110,8 +110,6 @@ _todoc() {
             fi ;;
         help)
             COMPREPLY=( $(compgen -W "$(todoc complete topics 2>/dev/null)" -- "$cur") ) ;;
-        mode)
-            COMPREPLY=( $(compgen -W "ai user" -- "$cur") ) ;;
         completions)
             COMPREPLY=( $(compgen -W "bash zsh fish install uninstall" -- "$cur") ) ;;
     esac

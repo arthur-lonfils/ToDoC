@@ -72,9 +72,6 @@ complete -c todoc -f -n '__todoc_using_command rm-label' -a '(__todoc_labels)'
 # help <topic>
 complete -c todoc -f -n '__todoc_using_command help' -a '(__todoc_topics)'
 
-# mode ai|user
-complete -c todoc -f -n '__todoc_using_command mode' -a 'ai user'
-
 # completions bash|zsh|fish|install|uninstall
 complete -c todoc -f -n '__todoc_using_command completions' \
     -a 'bash zsh fish install uninstall'

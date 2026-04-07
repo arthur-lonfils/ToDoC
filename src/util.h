@@ -24,17 +24,12 @@ char *todoc_get_active_project(void);           /* returns heap-allocated name o
 int todoc_set_active_project(const char *name); /* NULL to clear; returns 0 on success */
 
 /* Output mode — controls whether todoc emits human-formatted output
- * (USER) or structured JSON for LLM agents (AI). Persisted in
- * ~/.todoc/mode. The TODOC_MODE env var and the --json flag both
- * override the persisted value at process scope. */
+ * (USER) or structured JSON for LLM agents (AI). The mode is resolved
+ * once per process; see src/output.h for the resolution order. */
 typedef enum {
     OUTPUT_MODE_USER = 0,
     OUTPUT_MODE_AI,
 } output_mode_t;
-
-char *todoc_mode_path(void);            /* "~/.todoc/mode" */
-output_mode_t todoc_get_mode(void);     /* file → enum, defaults to USER */
-int todoc_set_mode(output_mode_t mode); /* writes "ai" or "user" */
 
 /* Detect the user's shell from $SHELL. Returns one of "bash", "zsh",
  * "fish", or NULL if $SHELL is unset or unrecognised. The returned
