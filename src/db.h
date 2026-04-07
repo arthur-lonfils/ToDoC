@@ -46,7 +46,25 @@ todoc_err_t db_task_set_status(int64_t id, status_t status);
 
 /* ── Statistics ──────────────────────────────────────────────── */
 
-todoc_err_t db_task_stats(task_stats_t *out_stats);
+/* Pass project_name=NULL for global stats, or a project name for scoped stats */
+todoc_err_t db_task_stats(task_stats_t *out_stats, const char *project_name);
+
+/* ── Project CRUD ───────────────────────────────────────────── */
+
+todoc_err_t db_project_insert(const project_t *project, int64_t *out_id);
+todoc_err_t db_project_get(int64_t id, project_t *out_project);
+todoc_err_t db_project_get_by_name(const char *name, project_t *out_project);
+todoc_err_t db_project_update(const project_t *project);
+todoc_err_t db_project_delete(int64_t id);
+todoc_err_t db_project_list(const project_filter_t *filter, project_t **out_projects,
+                            int *out_count);
+void db_project_list_free(project_t *projects, int count);
+int db_project_task_count(int64_t project_id);
+
+/* ── Task-Project junction ──────────────────────────────────── */
+
+todoc_err_t db_task_assign_project(int64_t task_id, int64_t project_id);
+todoc_err_t db_task_unassign_project(int64_t task_id, int64_t project_id);
 
 /* Last SQLite error message (valid until next db_* call) */
 const char *db_last_error(void);

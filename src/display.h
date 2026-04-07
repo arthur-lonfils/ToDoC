@@ -20,6 +20,12 @@ void display_task_list(const task_t *tasks, int count);
 /* Statistics summary */
 void display_stats(const task_stats_t *stats);
 
+/* ── Project output ─────────────────────────────────────────── */
+
+void display_project_row(const project_t *project);
+void display_project_detail(const project_t *project, int task_count);
+void display_project_list(const project_t *projects, int count);
+
 /* ── Feedback messages ───────────────────────────────────────── */
 
 void display_success(const char *fmt, ...);

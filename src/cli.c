@@ -13,15 +13,32 @@ typedef struct {
 } cmd_entry_t;
 
 static const cmd_entry_t cmd_table[] = {
-    {"init", CMD_INIT},         {"add", CMD_ADD},
-    {"list", CMD_LIST},         {"ls", CMD_LIST},
-    {"show", CMD_SHOW},         {"edit", CMD_EDIT},
-    {"done", CMD_DONE},         {"rm", CMD_RM},
-    {"remove", CMD_RM},         {"delete", CMD_RM},
-    {"stats", CMD_STATS},       {"export", CMD_EXPORT},
-    {"help", CMD_HELP},         {"--help", CMD_HELP},
-    {"-h", CMD_HELP},           {"version", CMD_VERSION},
-    {"--version", CMD_VERSION}, {"-v", CMD_VERSION},
+    {"init", CMD_INIT},
+    {"add", CMD_ADD},
+    {"list", CMD_LIST},
+    {"ls", CMD_LIST},
+    {"show", CMD_SHOW},
+    {"edit", CMD_EDIT},
+    {"done", CMD_DONE},
+    {"rm", CMD_RM},
+    {"remove", CMD_RM},
+    {"delete", CMD_RM},
+    {"stats", CMD_STATS},
+    {"export", CMD_EXPORT},
+    {"add-project", CMD_ADD_PROJECT},
+    {"list-projects", CMD_LIST_PROJECTS},
+    {"show-project", CMD_SHOW_PROJECT},
+    {"edit-project", CMD_EDIT_PROJECT},
+    {"rm-project", CMD_RM_PROJECT},
+    {"use", CMD_USE},
+    {"assign", CMD_ASSIGN},
+    {"unassign", CMD_UNASSIGN},
+    {"help", CMD_HELP},
+    {"--help", CMD_HELP},
+    {"-h", CMD_HELP},
+    {"version", CMD_VERSION},
+    {"--version", CMD_VERSION},
+    {"-v", CMD_VERSION},
     {NULL, CMD_NONE},
 };
 
@@ -73,6 +90,13 @@ static priority_t *alloc_priority(priority_t val)
 static status_t *alloc_status(status_t val)
 {
     status_t *p = todoc_malloc(sizeof(*p));
+    *p = val;
+    return p;
+}
+
+static project_status_t *alloc_project_status(project_status_t val)
+{
+    project_status_t *p = todoc_malloc(sizeof(*p));
     *p = val;
     return p;
 }
@@ -140,18 +164,33 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
             if (!val) {
                 return TODOC_ERR_INVALID;
             }
-            status_t s = str_to_status(val);
-            if ((int)s == -1) {
-                fprintf(stderr,
-                        "todoc: invalid status '%s' (expected: todo, in-progress, done, blocked, "
-                        "cancelled)\n",
-                        val);
-                return TODOC_ERR_INVALID;
+            /* For project commands, parse as project status */
+            if (out->command == CMD_ADD_PROJECT || out->command == CMD_EDIT_PROJECT ||
+                out->command == CMD_LIST_PROJECTS) {
+                project_status_t ps = str_to_project_status(val);
+                if ((int)ps == -1) {
+                    fprintf(stderr,
+                            "todoc: invalid project status '%s' (expected: active, completed, "
+                            "archived)\n",
+                            val);
+                    return TODOC_ERR_INVALID;
+                }
+                free(out->project_status);
+                out->project_status = alloc_project_status(ps);
+            } else {
+                status_t s = str_to_status(val);
+                if ((int)s == -1) {
+                    fprintf(stderr,
+                            "todoc: invalid status '%s' (expected: todo, in-progress, done, "
+                            "blocked, cancelled)\n",
+                            val);
+                    return TODOC_ERR_INVALID;
+                }
+                free(out->status);
+                out->status = alloc_status(s);
+                free(out->filter.status);
+                out->filter.status = alloc_status(s);
             }
-            free(out->status);
-            out->status = alloc_status(s);
-            free(out->filter.status);
-            out->filter.status = alloc_status(s);
         } else if (strcmp(arg, "--scope") == 0) {
             const char *val = consume_value(argc, argv, &i, arg);
             if (!val) {
@@ -207,6 +246,27 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
                 fprintf(stderr, "todoc: invalid limit '%s'\n", val);
                 return TODOC_ERR_INVALID;
             }
+        } else if (strcmp(arg, "--project") == 0 || strcmp(arg, "-P") == 0) {
+            const char *val = consume_value(argc, argv, &i, arg);
+            if (!val) {
+                return TODOC_ERR_INVALID;
+            }
+            free(out->project);
+            out->project = todoc_strdup(val);
+            free(out->filter.project);
+            out->filter.project = todoc_strdup(val);
+        } else if (strcmp(arg, "--all") == 0) {
+            out->all = 1;
+            out->filter.all = 1;
+        } else if (strcmp(arg, "--color") == 0) {
+            const char *val = consume_value(argc, argv, &i, arg);
+            if (!val) {
+                return TODOC_ERR_INVALID;
+            }
+            free(out->project_color);
+            out->project_color = todoc_strdup(val);
+        } else if (strcmp(arg, "--clear") == 0) {
+            out->clear = 1;
         } else if (!is_flag(arg)) {
             /* Positional argument handling depends on command */
             if (out->command == CMD_ADD && !out->title) {
@@ -217,6 +277,19 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
                 if (parse_task_id(arg, &out->task_id) != 0) {
                     return TODOC_ERR_INVALID;
                 }
+            } else if ((out->command == CMD_ADD_PROJECT || out->command == CMD_SHOW_PROJECT ||
+                        out->command == CMD_EDIT_PROJECT || out->command == CMD_RM_PROJECT ||
+                        out->command == CMD_USE) &&
+                       !out->project_name) {
+                out->project_name = todoc_strdup(arg);
+            } else if ((out->command == CMD_ASSIGN || out->command == CMD_UNASSIGN) &&
+                       out->task_id == 0) {
+                if (parse_task_id(arg, &out->task_id) != 0) {
+                    return TODOC_ERR_INVALID;
+                }
+            } else if ((out->command == CMD_ASSIGN || out->command == CMD_UNASSIGN) &&
+                       !out->project_name) {
+                out->project_name = todoc_strdup(arg);
             } else {
                 fprintf(stderr, "todoc: unexpected argument '%s'\n", arg);
                 return TODOC_ERR_INVALID;
@@ -247,8 +320,7 @@ todoc_err_t cli_parse(int argc, char **argv, cli_args_t *out)
         return TODOC_ERR_INVALID;
     }
 
-    if (out->command == CMD_HELP || out->command == CMD_VERSION || out->command == CMD_INIT ||
-        out->command == CMD_STATS) {
+    if (out->command == CMD_HELP || out->command == CMD_VERSION || out->command == CMD_INIT) {
         return TODOC_OK;
     }
 
@@ -270,6 +342,10 @@ void cli_args_free(cli_args_t *args)
     free(args->scope);
     free(args->due_date);
     task_filter_free(&args->filter);
+    free(args->project_name);
+    free(args->project_color);
+    free(args->project_status);
+    free(args->project);
     memset(args, 0, sizeof(*args));
 }
 
@@ -282,7 +358,7 @@ void cli_print_usage(void)
            "Usage:\n"
            "  todoc <command> [options]\n"
            "\n"
-           "Commands:\n"
+           "Task Commands:\n"
            "  init                       Initialize the task database\n"
            "  add <title> [options]      Add a new task\n"
            "  list [filters]             List tasks (alias: ls)\n"
@@ -292,28 +368,55 @@ void cli_print_usage(void)
            "  rm <id>                    Delete a task (aliases: remove, delete)\n"
            "  stats                      Show task statistics\n"
            "  export [filters]           Export tasks (default: csv)\n"
+           "\n"
+           "Project Commands:\n"
+           "  add-project <name>         Create a new project\n"
+           "  list-projects              List all projects\n"
+           "  show-project <name>        Show project details\n"
+           "  edit-project <name>        Edit a project\n"
+           "  rm-project <name>          Delete a project\n"
+           "  use <name>                 Set active project context\n"
+           "  use --clear                Clear active project\n"
+           "  assign <id> <project>      Assign task to project\n"
+           "  unassign <id> <project>    Remove task from project\n"
+           "\n"
+           "Other:\n"
            "  help                       Show this help message\n"
            "  version                    Show version\n"
            "\n"
-           "Options:\n"
+           "Task Options:\n"
            "  --title <text>             Task title (positional for add)\n"
            "  --desc <text>              Task description\n"
            "  --type, -t <type>          bug, feature, chore, idea\n"
            "  --priority, -p <priority>  critical, high, medium, low\n"
            "  --status, -s <status>      todo, in-progress, done, blocked, cancelled\n"
-           "  --scope <tag>              Project/scope tag\n"
+           "  --scope <tag>              Scope tag\n"
            "  --due <YYYY-MM-DD>         Due date\n"
            "  --format, -f <format>      Export format: csv (default), json\n"
            "  --limit <n>                Limit list results\n"
+           "  --project, -P <name>       Filter by or assign to project\n"
+           "  --all                      Show all tasks (bypass active project)\n"
+           "\n"
+           "Project Options:\n"
+           "  --desc <text>              Project description\n"
+           "  --color <tag>              Color/label tag\n"
+           "  --status, -s <status>      active, completed, archived\n"
+           "  --due <YYYY-MM-DD>         Project due date\n"
            "\n"
            "Examples:\n"
            "  todoc init\n"
-           "  todoc add \"Fix login bug\" --type bug --priority high --scope auth\n"
+           "  todoc add \"Fix login bug\" --type bug --priority high --project auth\n"
            "  todoc list --status todo --priority critical\n"
            "  todoc edit 3 --priority low --due 2026-04-15\n"
            "  todoc done 3\n"
            "  todoc rm 3\n"
            "  todoc export --format json > tasks.json\n"
-           "  todoc export --status done --format csv > done.csv\n",
+           "\n"
+           "  todoc add-project auth --desc \"Auth system\" --color blue\n"
+           "  todoc use auth\n"
+           "  todoc list                 (shows only auth tasks)\n"
+           "  todoc list --all           (shows all tasks)\n"
+           "  todoc assign 3 auth\n"
+           "  todoc use --clear\n",
            TODOC_VERSION);
 }

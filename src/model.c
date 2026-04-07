@@ -24,6 +24,12 @@ static const char *status_strings[STATUS_COUNT] = {
     [STATUS_BLOCKED] = "blocked", [STATUS_CANCELLED] = "cancelled",
 };
 
+static const char *project_status_strings[PROJECT_STATUS_COUNT] = {
+    [PROJECT_ACTIVE] = "active",
+    [PROJECT_COMPLETED] = "completed",
+    [PROJECT_ARCHIVED] = "archived",
+};
+
 /* ── Lifecycle ───────────────────────────────────────────────── */
 
 void task_free(task_t *task)
@@ -55,11 +61,42 @@ void task_filter_free(task_filter_t *filter)
     free(filter->priority);
     free(filter->type);
     free(filter->scope);
+    free(filter->project);
 
     filter->status = NULL;
     filter->priority = NULL;
     filter->type = NULL;
     filter->scope = NULL;
+    filter->project = NULL;
+}
+
+void project_free(project_t *project)
+{
+    if (!project) {
+        return;
+    }
+    free(project->name);
+    free(project->description);
+    free(project->color);
+    free(project->due_date);
+    free(project->created_at);
+    free(project->updated_at);
+
+    project->name = NULL;
+    project->description = NULL;
+    project->color = NULL;
+    project->due_date = NULL;
+    project->created_at = NULL;
+    project->updated_at = NULL;
+}
+
+void project_filter_free(project_filter_t *filter)
+{
+    if (!filter) {
+        return;
+    }
+    free(filter->status);
+    filter->status = NULL;
 }
 
 /* ── Enum -> string ──────────────────────────────────────────── */
@@ -127,4 +164,27 @@ status_t str_to_status(const char *s)
         }
     }
     return (status_t)-1;
+}
+
+/* ── Project status conversion ──────────────────────────────── */
+
+const char *project_status_to_str(project_status_t s)
+{
+    if (s >= 0 && s < PROJECT_STATUS_COUNT) {
+        return project_status_strings[s];
+    }
+    return "unknown";
+}
+
+project_status_t str_to_project_status(const char *s)
+{
+    if (!s) {
+        return (project_status_t)-1;
+    }
+    for (int i = 0; i < PROJECT_STATUS_COUNT; i++) {
+        if (strcmp(s, project_status_strings[i]) == 0) {
+            return (project_status_t)i;
+        }
+    }
+    return (project_status_t)-1;
 }

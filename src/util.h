@@ -18,6 +18,11 @@ int todoc_ensure_dir(const char *path);
 /* Validate date string format YYYY-MM-DD with range checks. Returns 1 if valid, 0 if not */
 int todoc_validate_date(const char *s);
 
+/* Active project context — stored in ~/.todoc/active_project */
+char *todoc_active_project_path(void);
+char *todoc_get_active_project(void);           /* returns heap-allocated name or NULL */
+int todoc_set_active_project(const char *name); /* NULL to clear; returns 0 on success */
+
 /* Safe allocation wrappers — exit(1) on OOM */
 void *todoc_malloc(size_t size);
 void *todoc_calloc(size_t count, size_t size);

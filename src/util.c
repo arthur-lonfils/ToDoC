@@ -126,6 +126,94 @@ int todoc_validate_date(const char *s)
     return 1;
 }
 
+/* ── Active project context ─────────────────────────────────── */
+
+char *todoc_active_project_path(void)
+{
+    const char *home = getenv("HOME");
+    if (!home) {
+        fprintf(stderr, "todoc: HOME environment variable not set\n");
+        return NULL;
+    }
+
+    size_t len = strlen(home) + strlen("/.todoc/active_project") + 1;
+    char *path = todoc_malloc(len);
+    snprintf(path, len, "%s/.todoc/active_project", home);
+    return path;
+}
+
+char *todoc_get_active_project(void)
+{
+    char *path = todoc_active_project_path();
+    if (!path) {
+        return NULL;
+    }
+
+    FILE *fp = fopen(path, "r");
+    free(path);
+    if (!fp) {
+        return NULL;
+    }
+
+    char buf[256] = {0};
+    if (!fgets(buf, sizeof(buf), fp)) {
+        fclose(fp);
+        return NULL;
+    }
+    fclose(fp);
+
+    /* Strip trailing newline */
+    size_t len = strlen(buf);
+    if (len > 0 && buf[len - 1] == '\n') {
+        buf[len - 1] = '\0';
+    }
+
+    if (buf[0] == '\0') {
+        return NULL;
+    }
+
+    return todoc_strdup(buf);
+}
+
+int todoc_set_active_project(const char *name)
+{
+    char *path = todoc_active_project_path();
+    if (!path) {
+        return -1;
+    }
+
+    if (!name) {
+        /* Clear: remove the file */
+        remove(path);
+        free(path);
+        return 0;
+    }
+
+    char *dir = todoc_dir_path();
+    if (!dir) {
+        free(path);
+        return -1;
+    }
+    if (todoc_ensure_dir(dir) != 0) {
+        free(dir);
+        free(path);
+        return -1;
+    }
+    free(dir);
+
+    FILE *fp = fopen(path, "w");
+    free(path);
+    if (!fp) {
+        return -1;
+    }
+
+    fprintf(fp, "%s\n", name);
+    fclose(fp);
+    return 0;
+}
+
+/* ── Safe allocation wrappers ──────────────────────────────── */
+
 void *todoc_malloc(size_t size)
 {
     void *ptr = malloc(size);
