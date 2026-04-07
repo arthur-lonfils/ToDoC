@@ -1,4 +1,5 @@
 #include "commands.h"
+#include "changelog.h"
 #include "db.h"
 #include "display.h"
 #include "export.h"
@@ -957,6 +958,7 @@ todoc_err_t cmd_update(const cli_args_t *args)
     }
 
     display_success("todoc updated.");
+    display_info("Run 'todoc changelog' to see what's new.");
     return TODOC_OK;
 }
 
@@ -1106,5 +1108,38 @@ todoc_err_t cmd_unlabel(const cli_args_t *args)
     }
 
     display_success("Task #%lld unlabelled '%s'.", (long long)args->task_id, args->label_name);
+    return TODOC_OK;
+}
+
+/* ── changelog ───────────────────────────────────────────────── */
+
+todoc_err_t cmd_changelog(const cli_args_t *args)
+{
+    /* Precedence (only one wins): --list > --all > --since > positional > default. */
+    if (args->changelog_list) {
+        changelog_list_versions();
+        return TODOC_OK;
+    }
+    if (args->all) {
+        changelog_print_all();
+        return TODOC_OK;
+    }
+    if (args->changelog_since) {
+        if (changelog_print_since(args->changelog_since) != 0) {
+            display_error("No release notes found newer than '%s'.", args->changelog_since);
+            return TODOC_ERR_NOT_FOUND;
+        }
+        return TODOC_OK;
+    }
+    if (args->changelog_version) {
+        if (changelog_print_version(args->changelog_version) != 0) {
+            display_error("Version '%s' not found in the embedded changelog.",
+                          args->changelog_version);
+            display_info("Run 'todoc changelog --list' to see available versions.");
+            return TODOC_ERR_NOT_FOUND;
+        }
+        return TODOC_OK;
+    }
+    changelog_print_latest();
     return TODOC_OK;
 }

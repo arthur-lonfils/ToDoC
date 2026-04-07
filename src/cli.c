@@ -46,6 +46,7 @@ static const cmd_entry_t cmd_table[] = {
     {"rm-label", CMD_RM_LABEL},
     {"label", CMD_LABEL},
     {"unlabel", CMD_UNLABEL},
+    {"changelog", CMD_CHANGELOG},
     {NULL, CMD_NONE},
 };
 
@@ -310,6 +311,15 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
              * comma-separated form itself. */
             free(out->filter.label);
             out->filter.label = todoc_strdup(val);
+        } else if (strcmp(arg, "--since") == 0) {
+            const char *val = consume_value(argc, argv, &i, arg);
+            if (!val) {
+                return TODOC_ERR_INVALID;
+            }
+            free(out->changelog_since);
+            out->changelog_since = todoc_strdup(val);
+        } else if (strcmp(arg, "--list") == 0) {
+            out->changelog_list = 1;
         } else if (!is_flag(arg)) {
             /* Positional argument handling depends on command */
             if (out->command == CMD_ADD && !out->title) {
@@ -346,6 +356,8 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
             } else if ((out->command == CMD_LABEL || out->command == CMD_UNLABEL) &&
                        !out->label_name) {
                 out->label_name = todoc_strdup(arg);
+            } else if (out->command == CMD_CHANGELOG && !out->changelog_version) {
+                out->changelog_version = todoc_strdup(arg);
             } else {
                 fprintf(stderr, "todoc: unexpected argument '%s'\n", arg);
                 return TODOC_ERR_INVALID;
@@ -414,6 +426,8 @@ void cli_args_free(cli_args_t *args)
     free(args->label_name);
     free(args->label_color);
     free(args->labels);
+    free(args->changelog_version);
+    free(args->changelog_since);
     memset(args, 0, sizeof(*args));
 }
 
@@ -462,6 +476,7 @@ static void print_overview(void)
            "  help [topic]               Show help (run 'todoc help help' for topics)\n"
            "  version                    Show version\n"
            "  update                     Update todoc to the latest release\n"
+           "  changelog [version]        Show release notes (--all, --since, --list)\n"
            "\n"
            "Help Topics:\n"
            "  todoc help task            Task commands and options\n"
@@ -748,6 +763,23 @@ static int print_command_topic(const char *cmd)
                "The label is auto-created if it does not already exist.\n");
     } else if (strcmp(cmd, "unlabel") == 0) {
         printf("todoc unlabel <id> <label> — Detach a label from a task\n");
+    } else if (strcmp(cmd, "changelog") == 0) {
+        printf("todoc changelog [version] — Show release notes\n"
+               "\n"
+               "The full CHANGELOG.md is embedded in the binary at build time,\n"
+               "so this command works fully offline. By default it prints the\n"
+               "section for the latest release.\n"
+               "\n"
+               "Usage:\n"
+               "  todoc changelog                  Latest release only (default)\n"
+               "  todoc changelog 0.4.0            One specific release\n"
+               "  todoc changelog v0.4.0           Same — leading 'v' is accepted\n"
+               "  todoc changelog --since 0.3.0    Everything strictly after 0.3.0\n"
+               "  todoc changelog --all            Full history\n"
+               "  todoc changelog --list           Just version names + dates\n"
+               "\n"
+               "After a 'todoc update', this is the fastest way to see what\n"
+               "changed in the version you just installed.\n");
     } else if (strcmp(cmd, "help") == 0) {
         printf("todoc help [topic] — Show help\n"
                "\n"

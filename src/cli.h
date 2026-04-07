@@ -38,6 +38,7 @@ typedef enum {
     CMD_RM_LABEL,
     CMD_LABEL,
     CMD_UNLABEL,
+    CMD_CHANGELOG,
 } command_t;
 
 /* ── Parsed CLI arguments ────────────────────────────────────── */
@@ -95,6 +96,11 @@ typedef struct {
     char *label_name;
     char *label_color;
     char *labels;
+
+    /* For 'changelog' */
+    char *changelog_version; /* positional X.Y.Z (or vX.Y.Z) */
+    char *changelog_since;   /* --since X.Y.Z */
+    int changelog_list;      /* --list flag */
 } cli_args_t;
 
 /* Parse argc/argv into a cli_args_t. Returns TODOC_OK or TODOC_ERR_INVALID.

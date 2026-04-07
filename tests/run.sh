@@ -385,6 +385,22 @@ assert_ok      "rm-label removes label"            rm-label weekly
 assert_fail    "rm-label nonexistent fails"        rm-label weekly
 echo ""
 
+# ── 8j. Changelog ───────────────────────────────────────────────
+
+echo "Changelog:"
+CL_VERSION=$(cat .version 2>/dev/null | tr -d '[:space:]')
+assert_output  "changelog default shows latest"   "## ["       changelog
+assert_output  "changelog default shows version"  "$CL_VERSION" changelog
+assert_output  "changelog --all shows multi"      "## ["       changelog --all
+assert_output  "changelog --list shows current"   "$CL_VERSION" changelog --list
+assert_output  "changelog by exact version"       "$CL_VERSION" changelog "$CL_VERSION"
+assert_output  "changelog accepts v-prefix"       "$CL_VERSION" changelog "v$CL_VERSION"
+assert_fail    "changelog unknown version fails"               changelog 99.99.99
+assert_output  "changelog --since prior version"  "## ["       changelog --since 0.0.0
+assert_fail    "changelog --since future version"              changelog --since 99.99.99
+assert_output  "help command changelog"           "release notes" help changelog
+echo ""
+
 # ── 9. Help / Version ───────���───────────────────────────────────
 
 echo "Help & Version:"

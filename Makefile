@@ -19,10 +19,11 @@ BUILD_DIR  = build
 SQL_DIR    = sql/migrations
 EMBED_SCRIPT = sql/embed.sh
 MIGRATIONS_SRC = $(SRC_DIR)/migrations.c
+CHANGELOG_EMBED_SCRIPT = scripts/embed_changelog.sh
+CHANGELOG_SRC = $(SRC_DIR)/changelog_data.c
 
-# SRCS is evaluated lazily, but migrations.c must exist first.
-# The $(TARGET) rule depends on embed via $(BUILD_DIR)/migrations.o -> $(MIGRATIONS_SRC).
-SRCS      = $(wildcard $(SRC_DIR)/*.c) $(MIGRATIONS_SRC)
+# SRCS is evaluated lazily, but generated sources must exist first.
+SRCS      = $(wildcard $(SRC_DIR)/*.c) $(MIGRATIONS_SRC) $(CHANGELOG_SRC)
 OBJS      = $(sort $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS)))
 TARGET    = $(BUILD_DIR)/todoc
 
@@ -32,10 +33,13 @@ all: $(TARGET)
 
 # ── Build ────────────────────────────────────────────────────────
 
-embed: $(MIGRATIONS_SRC)
+embed: $(MIGRATIONS_SRC) $(CHANGELOG_SRC)
 
 $(MIGRATIONS_SRC): $(wildcard $(SQL_DIR)/*.sql) $(EMBED_SCRIPT)
 	sh $(EMBED_SCRIPT)
+
+$(CHANGELOG_SRC): CHANGELOG.md $(CHANGELOG_EMBED_SCRIPT)
+	sh $(CHANGELOG_EMBED_SCRIPT)
 
 $(TARGET): $(OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
@@ -44,6 +48,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD_DIR)/migrations.o: $(MIGRATIONS_SRC)
+$(BUILD_DIR)/changelog_data.o: $(CHANGELOG_SRC)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
