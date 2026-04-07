@@ -1,7 +1,7 @@
 # todoc
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](.version)
+[![Version](https://img.shields.io/badge/version-0.4.0-green.svg)](.version)
 [![CI](https://github.com/arthur-lonfils/ToDoC/actions/workflows/ci.yml/badge.svg)](https://github.com/arthur-lonfils/ToDoC/actions/workflows/ci.yml)
 
 A fast, full-featured command-line task manager written in C. SQLite-backed with ANSI color output, filtering, export, and zero memory leaks.
@@ -10,6 +10,9 @@ A fast, full-featured command-line task manager written in C. SQLite-backed with
 
 - Full CRUD: add, list, show, edit, done, delete
 - Task attributes: type, priority, status, scope, due date, description
+- **Projects** for grouping tasks, with an active-project context that
+  scopes `list`, `stats`, and `export` by default
+- Many-to-many task ↔ project relationships
 - Filtered views by any attribute combination
 - Export to CSV or JSON
 - Color-coded terminal output (respects `NO_COLOR`)
@@ -96,6 +99,41 @@ todoc export --format json > tasks.json
 todoc export --status done --format csv > done.csv
 ```
 
+## Projects
+
+Group tasks into projects and switch context with `todoc use` so the
+common commands operate on a single project by default.
+
+```bash
+# Create a project with metadata
+todoc add-project auth --desc "Authentication system" --color blue --due 2026-06-01
+
+# Add a task directly to a project
+todoc add "Fix login bug" --type bug --priority high --project auth
+
+# Or assign / unassign existing tasks (a task can belong to many projects)
+todoc assign 42 auth
+todoc unassign 42 auth
+
+# Set the active project — list/stats/export now scope to it automatically
+todoc use auth
+todoc list                  # only auth tasks
+todoc list --all            # bypass active project for one command
+todoc stats                 # scoped to auth
+
+# Clear the active project
+todoc use --clear
+
+# Manage projects
+todoc list-projects                              # all projects
+todoc list-projects --status active              # filter by lifecycle
+todoc show-project auth                          # detail + task count
+todoc edit-project auth --status completed
+todoc rm-project auth                            # tasks survive, links removed
+```
+
+Project lifecycle statuses: `active`, `completed`, `archived`.
+
 ## Task Attributes
 
 | Attribute  | Values                                          |
@@ -111,7 +149,7 @@ todoc export --status done --format csv > done.csv
 ```bash
 make setup           # install git hooks (commit lint + format check)
 make                 # build
-make test            # run 56 tests
+make test            # run the test suite
 make test-valgrind   # run tests with leak checking
 make format          # auto-format with clang-format
 make quality         # format check
