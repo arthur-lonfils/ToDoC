@@ -36,6 +36,11 @@ char *todoc_mode_path(void);            /* "~/.todoc/mode" */
 output_mode_t todoc_get_mode(void);     /* file → enum, defaults to USER */
 int todoc_set_mode(output_mode_t mode); /* writes "ai" or "user" */
 
+/* Detect the user's shell from $SHELL. Returns one of "bash", "zsh",
+ * "fish", or NULL if $SHELL is unset or unrecognised. The returned
+ * pointer is a literal — do not free it. */
+const char *todoc_detect_shell(void);
+
 /* Safe allocation wrappers — exit(1) on OOM */
 void *todoc_malloc(size_t size);
 void *todoc_calloc(size_t count, size_t size);

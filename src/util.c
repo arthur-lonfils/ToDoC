@@ -287,6 +287,30 @@ int todoc_set_mode(output_mode_t mode)
     return 0;
 }
 
+/* ── Shell detection ────────────────────────────────────────── */
+
+const char *todoc_detect_shell(void)
+{
+    const char *shell = getenv("SHELL");
+    if (!shell || !*shell) {
+        return NULL;
+    }
+    /* Take the basename: /usr/bin/zsh → zsh */
+    const char *base = strrchr(shell, '/');
+    base = base ? base + 1 : shell;
+
+    if (strcmp(base, "bash") == 0) {
+        return "bash";
+    }
+    if (strcmp(base, "zsh") == 0) {
+        return "zsh";
+    }
+    if (strcmp(base, "fish") == 0) {
+        return "fish";
+    }
+    return NULL;
+}
+
 /* ── Safe allocation wrappers ──────────────────────────────── */
 
 void *todoc_malloc(size_t size)

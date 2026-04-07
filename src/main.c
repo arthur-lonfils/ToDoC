@@ -79,6 +79,13 @@ int main(int argc, char **argv)
         return (err == TODOC_OK) ? 0 : 1;
     }
 
+    /* completions just prints embedded scripts or writes a file; no DB needed */
+    if (args.command == CMD_COMPLETIONS) {
+        err = cmd_completions(&args);
+        cli_args_free(&args);
+        return (err == TODOC_OK) ? 0 : 1;
+    }
+
     /* All other commands need the database open */
     if (db_open() != TODOC_OK) {
         output_error("dispatch", "db_error", "Failed to open database: %s", db_last_error());
@@ -112,6 +119,7 @@ int main(int argc, char **argv)
         [CMD_RM_LABEL] = cmd_rm_label,
         [CMD_LABEL] = cmd_label,
         [CMD_UNLABEL] = cmd_unlabel,
+        [CMD_COMPLETE] = cmd_complete,
     };
 
     cmd_handler_t handler = handlers[args.command];

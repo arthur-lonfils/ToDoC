@@ -1,6 +1,10 @@
 CC       = gcc
 CFLAGS   = -std=c11 -Wall -Wextra -Wpedantic -Werror -Wshadow -Wstrict-prototypes
 CFLAGS  += -D_POSIX_C_SOURCE=200809L
+# Embedded scripts (completions, possibly future ones) exceed the
+# ISO C99 4095-byte string-literal portability minimum. Modern
+# compilers handle multi-MB literals fine.
+CFLAGS  += -Wno-overlength-strings
 LDFLAGS  =
 LDLIBS   = -lsqlite3
 
@@ -21,9 +25,11 @@ EMBED_SCRIPT = sql/embed.sh
 MIGRATIONS_SRC = $(SRC_DIR)/migrations.c
 CHANGELOG_EMBED_SCRIPT = scripts/embed_changelog.sh
 CHANGELOG_SRC = $(SRC_DIR)/changelog_data.c
+COMPLETIONS_EMBED_SCRIPT = scripts/embed_completions.sh
+COMPLETIONS_SRC = $(SRC_DIR)/completions_data.c
 
 # SRCS is evaluated lazily, but generated sources must exist first.
-SRCS      = $(wildcard $(SRC_DIR)/*.c) $(MIGRATIONS_SRC) $(CHANGELOG_SRC)
+SRCS      = $(wildcard $(SRC_DIR)/*.c) $(MIGRATIONS_SRC) $(CHANGELOG_SRC) $(COMPLETIONS_SRC)
 OBJS      = $(sort $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS)))
 TARGET    = $(BUILD_DIR)/todoc
 
@@ -33,13 +39,16 @@ all: $(TARGET)
 
 # ── Build ────────────────────────────────────────────────────────
 
-embed: $(MIGRATIONS_SRC) $(CHANGELOG_SRC)
+embed: $(MIGRATIONS_SRC) $(CHANGELOG_SRC) $(COMPLETIONS_SRC)
 
 $(MIGRATIONS_SRC): $(wildcard $(SQL_DIR)/*.sql) $(EMBED_SCRIPT)
 	sh $(EMBED_SCRIPT)
 
 $(CHANGELOG_SRC): CHANGELOG.md $(CHANGELOG_EMBED_SCRIPT)
 	sh $(CHANGELOG_EMBED_SCRIPT)
+
+$(COMPLETIONS_SRC): $(wildcard scripts/completions/*) $(COMPLETIONS_EMBED_SCRIPT)
+	sh $(COMPLETIONS_EMBED_SCRIPT)
 
 $(TARGET): $(OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
@@ -49,6 +58,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 
 $(BUILD_DIR)/migrations.o: $(MIGRATIONS_SRC)
 $(BUILD_DIR)/changelog_data.o: $(CHANGELOG_SRC)
+$(BUILD_DIR)/completions_data.o: $(COMPLETIONS_SRC)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)

@@ -34,5 +34,7 @@ todoc_err_t cmd_unlabel(const cli_args_t *args);
 todoc_err_t cmd_changelog(const cli_args_t *args);
 todoc_err_t cmd_mode(const cli_args_t *args);
 todoc_err_t cmd_uninstall(const cli_args_t *args);
+todoc_err_t cmd_completions(const cli_args_t *args);
+todoc_err_t cmd_complete(const cli_args_t *args);
 
 #endif

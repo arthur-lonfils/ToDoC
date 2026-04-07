@@ -8,3 +8,4 @@ build/
 compile_commands.json
 src/migrations.c
 src/changelog_data.c
+src/completions_data.c

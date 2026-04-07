@@ -10,6 +10,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Forward declarations for the completion helpers defined at the
+ * bottom of this file. cmd_init uses init_offer_completion to
+ * either silently refresh an existing completion file or, on first
+ * run, prompt the user once to install it. */
+static void init_offer_completion(void);
+
 /* ── init ────────────────────────────────────────────────────── */
 
 todoc_err_t cmd_init(const cli_args_t *args)
@@ -31,6 +37,15 @@ todoc_err_t cmd_init(const cli_args_t *args)
     char *path = todoc_db_path();
     output_init_db(path ? path : "~/.todoc/todoc.db", 0);
     free(path);
+
+    /* After the DB is ready, refresh the user's shell completion
+     * file (silent if it already exists, prompt-once if it doesn't,
+     * skip entirely in ai mode). This is the single hook for both
+     * first install and every subsequent 'todoc update' since the
+     * install script always runs `todoc init` after replacing the
+     * binary. */
+    init_offer_completion();
+
     return TODOC_OK;
 }
 
@@ -1331,4 +1346,356 @@ todoc_err_t cmd_uninstall(const cli_args_t *args)
     output_uninstalled(binary_path, data_purged, data_path);
     free(data_path);
     return TODOC_OK;
+}
+
+/* ── completions / complete ──────────────────────────────────── */
+
+#include "completions.h"
+
+/* Top-level command names list — single source of truth for
+ * 'todoc complete commands' so the embedded shell scripts don't
+ * have to repeat the dispatch table from cli.c. */
+static const char *const all_command_names[] = {
+    "init",        "add",           "list",         "ls",
+    "show",        "edit",          "done",         "rm",
+    "remove",      "delete",        "stats",        "export",
+    "add-project", "list-projects", "show-project", "edit-project",
+    "rm-project",  "use",           "assign",       "unassign",
+    "move",        "add-label",     "list-labels",  "rm-label",
+    "label",       "unlabel",       "changelog",    "mode",
+    "help",        "version",       "update",       "uninstall",
+    "completions",
+};
+static const int all_command_names_count =
+    (int)(sizeof(all_command_names) / sizeof(all_command_names[0]));
+
+static const char *const all_topic_names[] = {
+    "task",         "tasks",       "project",   "projects",    "label",         "labels",
+    "export",       "init",        "add",       "list",        "show",          "edit",
+    "done",         "rm",          "stats",     "add-project", "list-projects", "show-project",
+    "edit-project", "rm-project",  "use",       "assign",      "unassign",      "move",
+    "add-label",    "list-labels", "rm-label",  "label",       "unlabel",       "changelog",
+    "mode",         "update",      "uninstall", "completions", "complete",      "help",
+    "version",
+};
+static const int all_topic_names_count =
+    (int)(sizeof(all_topic_names) / sizeof(all_topic_names[0]));
+
+todoc_err_t cmd_complete(const cli_args_t *args)
+{
+    if (!args->completion_target) {
+        output_error("complete", "invalid_input",
+                     "Usage: todoc complete <commands|topics|projects|labels|task-ids>");
+        return TODOC_ERR_INVALID;
+    }
+
+    if (strcmp(args->completion_target, "commands") == 0) {
+        for (int i = 0; i < all_command_names_count; i++) {
+            puts(all_command_names[i]);
+        }
+        return TODOC_OK;
+    }
+    if (strcmp(args->completion_target, "topics") == 0) {
+        for (int i = 0; i < all_topic_names_count; i++) {
+            puts(all_topic_names[i]);
+        }
+        return TODOC_OK;
+    }
+
+    if (strcmp(args->completion_target, "projects") == 0) {
+        project_filter_t filter = {0};
+        project_t *projects = NULL;
+        int count = 0;
+        if (db_project_list(&filter, &projects, &count) != TODOC_OK) {
+            return TODOC_ERR_DB;
+        }
+        for (int i = 0; i < count; i++) {
+            puts(projects[i].name);
+        }
+        db_project_list_free(projects, count);
+        return TODOC_OK;
+    }
+
+    if (strcmp(args->completion_target, "labels") == 0) {
+        label_t *labels = NULL;
+        int count = 0;
+        if (db_label_list(&labels, &count) != TODOC_OK) {
+            return TODOC_ERR_DB;
+        }
+        for (int i = 0; i < count; i++) {
+            puts(labels[i].name);
+        }
+        db_label_list_free(labels, count);
+        return TODOC_OK;
+    }
+
+    if (strcmp(args->completion_target, "task-ids") == 0) {
+        task_filter_t filter = {0};
+        filter.all = 1;
+        task_t *tasks = NULL;
+        int count = 0;
+        if (db_task_list(&filter, &tasks, &count) != TODOC_OK) {
+            return TODOC_ERR_DB;
+        }
+        for (int i = 0; i < count; i++) {
+            printf("%lld\n", (long long)tasks[i].id);
+        }
+        db_task_list_free(tasks, count);
+        return TODOC_OK;
+    }
+
+    output_error("complete", "invalid_input", "Unknown completion kind '%s'.",
+                 args->completion_target);
+    return TODOC_ERR_INVALID;
+}
+
+/* Resolve where the per-shell completion file should live for the
+ * current user. Heap-allocated; caller frees. */
+static char *completions_install_path(const char *shell)
+{
+    const char *home = getenv("HOME");
+    if (!home || !*home) {
+        return NULL;
+    }
+    char buf[PATH_MAX];
+    if (strcmp(shell, "bash") == 0) {
+        snprintf(buf, sizeof(buf), "%s/.local/share/bash-completion/completions/todoc", home);
+    } else if (strcmp(shell, "zsh") == 0) {
+        snprintf(buf, sizeof(buf), "%s/.zfunc/_todoc", home);
+    } else if (strcmp(shell, "fish") == 0) {
+        snprintf(buf, sizeof(buf), "%s/.config/fish/completions/todoc.fish", home);
+    } else {
+        return NULL;
+    }
+    return todoc_strdup(buf);
+}
+
+/* mkdir -p the parent directory of `path`. */
+static int ensure_parent_dir(const char *path)
+{
+    char copy[PATH_MAX];
+    snprintf(copy, sizeof(copy), "%s", path);
+    char *slash = strrchr(copy, '/');
+    if (!slash) {
+        return 0;
+    }
+    *slash = '\0';
+    char cmd[PATH_MAX + 16];
+    snprintf(cmd, sizeof(cmd), "mkdir -p '%s'", copy);
+    return system(cmd);
+}
+
+static todoc_err_t install_completion(const char *shell)
+{
+    const completion_script_t *script = completions_find(shell);
+    if (!script) {
+        output_error("completions", "invalid_input", "No embedded completion script for '%s'.",
+                     shell);
+        return TODOC_ERR_INVALID;
+    }
+    char *path = completions_install_path(shell);
+    if (!path) {
+        output_error("completions", "io_error",
+                     "Could not resolve install path for '%s' (HOME unset?).", shell);
+        return TODOC_ERR_IO;
+    }
+    if (ensure_parent_dir(path) != 0) {
+        output_error("completions", "io_error", "Failed to create directory for '%s'.", path);
+        free(path);
+        return TODOC_ERR_IO;
+    }
+    FILE *fp = fopen(path, "w");
+    if (!fp) {
+        output_error("completions", "io_error", "Failed to open '%s' for writing.", path);
+        free(path);
+        return TODOC_ERR_IO;
+    }
+    fputs(script->body, fp);
+    fclose(fp);
+
+    if (output_is_ai()) {
+        output_success("completions", "Installed %s completion at %s", shell, path);
+    } else {
+        display_success("Installed %s completion at %s", shell, path);
+        if (strcmp(shell, "zsh") == 0) {
+            display_info("Make sure ~/.zfunc is in your fpath:");
+            display_info("  fpath+=(~/.zfunc)");
+            display_info("  autoload -U compinit && compinit");
+        } else if (strcmp(shell, "bash") == 0) {
+            display_info("Restart your shell, or run:");
+            display_info("  source %s", path);
+        } else if (strcmp(shell, "fish") == 0) {
+            display_info("Restart fish or run 'fish' to pick up the new completion.");
+        }
+    }
+    free(path);
+    return TODOC_OK;
+}
+
+static todoc_err_t uninstall_completion(const char *shell)
+{
+    char *path = completions_install_path(shell);
+    if (!path) {
+        output_error("completions", "io_error", "Could not resolve install path for '%s'.", shell);
+        return TODOC_ERR_IO;
+    }
+    int rc = unlink(path);
+    if (rc != 0) {
+        if (errno == ENOENT) {
+            output_error("completions", "not_found", "No installed completion file at %s.", path);
+            free(path);
+            return TODOC_ERR_NOT_FOUND;
+        }
+        output_error("completions", "io_error", "Failed to remove %s: %s", path, strerror(errno));
+        free(path);
+        return TODOC_ERR_IO;
+    }
+    if (output_is_ai()) {
+        output_success("completions", "Removed %s completion at %s", shell, path);
+    } else {
+        display_success("Removed %s completion at %s", shell, path);
+    }
+    free(path);
+    return TODOC_OK;
+}
+
+todoc_err_t cmd_completions(const cli_args_t *args)
+{
+    if (!args->completion_target) {
+        output_error("completions", "invalid_input",
+                     "Usage: todoc completions <bash|zsh|fish|install|uninstall>");
+        return TODOC_ERR_INVALID;
+    }
+
+    if (strcmp(args->completion_target, "install") == 0) {
+        const char *shell = todoc_detect_shell();
+        if (!shell) {
+            output_error("completions", "unknown_shell",
+                         "Could not detect your shell from $SHELL.");
+            display_info("Pass the shell explicitly: todoc completions <bash|zsh|fish>");
+            return TODOC_ERR_INVALID;
+        }
+        return install_completion(shell);
+    }
+    if (strcmp(args->completion_target, "uninstall") == 0) {
+        const char *shell = todoc_detect_shell();
+        if (!shell) {
+            output_error("completions", "unknown_shell",
+                         "Could not detect your shell from $SHELL.");
+            return TODOC_ERR_INVALID;
+        }
+        return uninstall_completion(shell);
+    }
+
+    /* Otherwise treat the target as a shell name and print the script. */
+    const completion_script_t *script = completions_find(args->completion_target);
+    if (!script) {
+        output_error("completions", "invalid_input",
+                     "Unknown shell '%s' (expected: bash, zsh, fish, install, uninstall).",
+                     args->completion_target);
+        return TODOC_ERR_INVALID;
+    }
+    fputs(script->body, stdout);
+    return TODOC_OK;
+}
+
+/* ── init → completion offer ─────────────────────────────────── */
+
+/* Called from cmd_init after the DB is ready. Three behaviors:
+ *
+ *   - if a completion file already exists at the auto-detect path
+ *     for the current shell, silently rewrite it with the embedded
+ *     script from this binary (so 'todoc update' picks up new
+ *     commands and flags without the user lifting a finger);
+ *
+ *   - if no file exists and the user hasn't previously declined,
+ *     prompt once "[Y/n]" and either install or write a marker so
+ *     we never ask again;
+ *
+ *   - in ai mode or when $SHELL is unrecognised, do nothing.
+ *
+ * The user can always run 'todoc completions install/uninstall'
+ * manually as the explicit override. */
+static void init_offer_completion(void)
+{
+    /* Never prompt or write files in ai mode — the JSON envelope
+     * for cmd_init has already been emitted and we mustn't add
+     * anything to stdout/stderr. */
+    if (output_is_ai()) {
+        return;
+    }
+
+    const char *shell = todoc_detect_shell();
+    if (!shell) {
+        return; /* unknown shell — nothing we can offer */
+    }
+
+    char *path = completions_install_path(shell);
+    if (!path) {
+        return;
+    }
+
+    /* Silent refresh path: the file already exists, so just rewrite
+     * it with the version embedded in this binary. */
+    if (access(path, F_OK) == 0) {
+        const completion_script_t *script = completions_find(shell);
+        if (script) {
+            FILE *fp = fopen(path, "w");
+            if (fp) {
+                fputs(script->body, fp);
+                fclose(fp);
+            }
+        }
+        free(path);
+        return;
+    }
+
+    /* If the user previously declined, don't ask again. */
+    char *dir = todoc_dir_path();
+    if (!dir) {
+        free(path);
+        return;
+    }
+    char marker_path[PATH_MAX];
+    snprintf(marker_path, sizeof(marker_path), "%s/no_completion", dir);
+    free(dir);
+    if (access(marker_path, F_OK) == 0) {
+        free(path);
+        return;
+    }
+
+    /* If stdin isn't a TTY (CI, pipes, scripted install, test suite),
+     * silently skip — never block on input that no one will type.
+     * The marker is NOT created, so the prompt will fire properly
+     * the next time the user runs init from a real terminal. */
+    if (!isatty(STDIN_FILENO)) {
+        free(path);
+        return;
+    }
+
+    printf("\n· Tab completion for %s is not installed.\n", shell);
+    printf("  Install it now? It enables Tab completion for commands,\n");
+    printf("  flags, project names, label names, and task IDs. [Y/n] ");
+    fflush(stdout);
+
+    char buf[16] = {0};
+    if (!fgets(buf, sizeof(buf), stdin)) {
+        free(path);
+        return;
+    }
+
+    if (buf[0] == 'n' || buf[0] == 'N') {
+        FILE *m = fopen(marker_path, "w");
+        if (m) {
+            fclose(m);
+        }
+        display_info("Skipped. Run 'todoc completions install' anytime to add it.");
+        free(path);
+        return;
+    }
+
+    /* Yes (or empty/Enter): install. install_completion handles its
+     * own success messages and shell-specific hints. */
+    free(path);
+    install_completion(shell);
 }
