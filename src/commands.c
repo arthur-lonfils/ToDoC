@@ -6,6 +6,7 @@
 #include "output.h"
 #include "util.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -1202,5 +1203,132 @@ todoc_err_t cmd_mode(const cli_args_t *args)
     }
     /* No argument: print current mode (resolved at output_init time) */
     output_mode_status(output_get_mode(), 0);
+    return TODOC_OK;
+}
+
+/* ── uninstall ───────────────────────────────────────────────── */
+
+#include <errno.h>
+#include <limits.h>
+#include <unistd.h>
+
+/* Resolve the absolute path of the running binary via /proc/self/exe.
+ * Returns 0 on success, -1 on failure (sets errno). */
+static int resolve_self_path(char *out, size_t out_size)
+{
+    ssize_t n = readlink("/proc/self/exe", out, out_size - 1);
+    if (n < 0) {
+        return -1;
+    }
+    out[n] = '\0';
+    return 0;
+}
+
+/* Sanity-check that `dir` looks like a todoc data dir before we
+ * recursively delete it. We require it to end in "/.todoc" so that
+ * an unset HOME or pathological env var can't blow away the wrong
+ * directory. Returns 1 if safe, 0 otherwise. */
+static int looks_like_todoc_dir(const char *dir)
+{
+    if (!dir) {
+        return 0;
+    }
+    size_t len = strlen(dir);
+    const char *suffix = "/.todoc";
+    size_t slen = strlen(suffix);
+    if (len <= slen) {
+        return 0;
+    }
+    return strcmp(dir + len - slen, suffix) == 0;
+}
+
+todoc_err_t cmd_uninstall(const cli_args_t *args)
+{
+    char binary_path[PATH_MAX];
+    if (resolve_self_path(binary_path, sizeof(binary_path)) != 0) {
+        output_error("uninstall", "io_error", "Could not resolve the running binary's path: %s",
+                     strerror(errno));
+        return TODOC_ERR_IO;
+    }
+
+    char *data_path = todoc_dir_path();
+
+    /* User mode: print plan + interactive confirmation unless --yes.
+     * AI mode: refuse without --yes (no prompts in JSON workflows). */
+    if (!output_is_ai()) {
+        printf("This will remove %s\n", binary_path);
+        if (args->purge) {
+            printf("It will ALSO remove %s (data + backups).\n",
+                   data_path ? data_path : "~/.todoc/");
+        } else {
+            printf("Your data in %s will be kept (use --purge to remove).\n",
+                   data_path ? data_path : "~/.todoc/");
+        }
+    }
+
+    if (!args->yes) {
+        if (output_is_ai()) {
+            output_error("uninstall", "needs_confirmation",
+                         "Refusing to uninstall in ai mode without --yes "
+                         "(interactive prompts are unavailable).");
+            free(data_path);
+            return TODOC_ERR_INVALID;
+        }
+        printf("\nContinue? [y/N] ");
+        fflush(stdout);
+        char buf[8] = {0};
+        if (!fgets(buf, sizeof(buf), stdin) || (buf[0] != 'y' && buf[0] != 'Y')) {
+            display_info("Aborted.");
+            free(data_path);
+            return TODOC_OK;
+        }
+    }
+
+    /* Step 1: optionally wipe the data directory. We do this BEFORE
+     * unlinking the binary so that on a permission failure we still
+     * have a working binary the user can re-run with sudo. */
+    int data_purged = 0;
+    if (args->purge && data_path) {
+        if (!looks_like_todoc_dir(data_path)) {
+            output_error("uninstall", "internal",
+                         "Refusing to purge '%s' — does not look like a todoc data dir.",
+                         data_path);
+            free(data_path);
+            return TODOC_ERR_INVALID;
+        }
+        /* Use system() with single-quoted path. We've already verified
+         * the path ends in "/.todoc" so the blast radius is bounded. */
+        char cmd[PATH_MAX + 32];
+        snprintf(cmd, sizeof(cmd), "rm -rf '%s'", data_path);
+        int rc = system(cmd);
+        if (rc != 0) {
+            output_error("uninstall", "io_error",
+                         "Failed to remove data directory '%s' (rm exited %d).", data_path, rc);
+            free(data_path);
+            return TODOC_ERR_IO;
+        }
+        data_purged = 1;
+    }
+
+    /* Step 2: unlink the binary. On Linux this is safe even though
+     * we're currently executing it — the inode survives until the
+     * process exits. On EACCES (e.g. /usr/local/bin needs sudo)
+     * we exit cleanly with a hint. */
+    if (unlink(binary_path) != 0) {
+        if (errno == EACCES || errno == EPERM) {
+            output_error("uninstall", "permission_denied",
+                         "Permission denied removing %s. Re-run with sudo:", binary_path);
+            display_info("  sudo todoc uninstall%s%s", args->purge ? " --purge" : "",
+                         args->yes ? " --yes" : "");
+        } else {
+            output_error("uninstall", "io_error", "Failed to remove %s: %s", binary_path,
+                         strerror(errno));
+        }
+        free(data_path);
+        return TODOC_ERR_IO;
+    }
+
+    output_uninstalled(binary_path, data_purged, data_path);
+    free(data_path);
     return TODOC_OK;
 }

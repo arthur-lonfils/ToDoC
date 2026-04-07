@@ -41,7 +41,7 @@ static char *cache_path(void)
 static int command_is_noisy(command_t cmd)
 {
     return cmd == CMD_NONE || cmd == CMD_HELP || cmd == CMD_VERSION || cmd == CMD_UPDATE ||
-           cmd == CMD_CHANGELOG || cmd == CMD_MODE;
+           cmd == CMD_CHANGELOG || cmd == CMD_MODE || cmd == CMD_UNINSTALL;
 }
 
 int update_check_disabled(command_t cmd)

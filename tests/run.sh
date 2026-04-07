@@ -574,6 +574,100 @@ rm -f "$HOME/.todoc/update_check"
 assert_output  "help command mode"              "Switch output mode"            help mode
 echo ""
 
+# ── 8m. Uninstall ──────────────────────────────────────────────
+
+echo "Uninstall:"
+# We test against a COPY of the binary so the suite never blows away
+# its own ./build/todoc. Each subtest gets a fresh copy.
+
+copy_binary() {
+    cp ./build/todoc "$HOME/todoc-uninst"
+}
+
+assert_output  "help command uninstall"   "Remove the todoc binary"   help uninstall
+
+# 1. Without --yes and without stdin input → aborts via prompt
+copy_binary
+echo "n" | "$HOME/todoc-uninst" uninstall > "$HOME/_un_out" 2>&1
+if [ -x "$HOME/todoc-uninst" ]; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  uninstall aborts on n\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  uninstall aborts on n (binary missing!)\n"
+fi
+rm -f "$HOME/todoc-uninst"
+
+# 2. With --yes, default keeps data
+copy_binary
+echo "kept" > "$HOME/.todoc/marker"
+"$HOME/todoc-uninst" uninstall --yes > "$HOME/_un_out" 2>&1
+out=$(cat "$HOME/_un_out")
+if [ ! -e "$HOME/todoc-uninst" ] && [ -f "$HOME/.todoc/marker" ]; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  uninstall --yes removes binary, keeps data\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  uninstall --yes (binary=%s data=%s)\n" \
+        "$([ -e "$HOME/todoc-uninst" ] && echo present || echo missing)" \
+        "$([ -f "$HOME/.todoc/marker" ] && echo present || echo missing)"
+    printf "        %s\n" "$out"
+fi
+rm -f "$HOME/.todoc/marker"
+
+# 3. With --purge --yes, data dir is wiped too
+copy_binary
+echo "to-be-deleted" > "$HOME/.todoc/marker"
+"$HOME/todoc-uninst" uninstall --purge --yes > "$HOME/_un_out" 2>&1
+if [ ! -e "$HOME/todoc-uninst" ] && [ ! -d "$HOME/.todoc" ]; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  uninstall --purge --yes removes binary AND data\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  uninstall --purge --yes (binary=%s data=%s)\n" \
+        "$([ -e "$HOME/todoc-uninst" ] && echo present || echo missing)" \
+        "$([ -d "$HOME/.todoc" ] && echo present || echo missing)"
+fi
+mkdir -p "$HOME/.todoc"  # restore for the rest of the suite
+
+# 4. ai mode without --yes returns a JSON error envelope
+copy_binary
+out=$(env TODOC_MODE=ai "$HOME/todoc-uninst" uninstall 2>&1 || true)
+if echo "$out" | grep -q '"code":"needs_confirmation"'; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  ai uninstall without --yes refuses\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  ai uninstall without --yes refuses\n"
+    printf "        got: %s\n" "$out"
+fi
+if [ -x "$HOME/todoc-uninst" ]; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  ai refusal leaves binary intact\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  ai refusal leaves binary intact\n"
+fi
+rm -f "$HOME/todoc-uninst"
+
+# 5. ai mode with --yes succeeds and emits a JSON envelope
+copy_binary
+out=$(env TODOC_MODE=ai "$HOME/todoc-uninst" uninstall --yes 2>&1)
+if echo "$out" | grep -q '"command":"uninstall"' && \
+   echo "$out" | grep -q '"ok":true' && \
+   echo "$out" | grep -q '"binary_path":' && \
+   [ ! -e "$HOME/todoc-uninst" ]; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  ai uninstall --yes emits envelope and removes binary\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  ai uninstall --yes\n"
+    printf "        got: %s\n" "$out"
+fi
+
+rm -f "$HOME/_un_out"
+echo ""
+
 # ── 9. Help / Version ───────���───────────────────────────────────
 
 echo "Help & Version:"

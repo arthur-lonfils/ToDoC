@@ -62,6 +62,7 @@ void output_stats(const task_stats_t *s, const char *project_scope);
 void output_init_db(const char *db_path, int already_existed);
 void output_mode_status(output_mode_t mode, int just_set);
 void output_update_done(const char *current_version);
+void output_uninstalled(const char *binary_path, int data_purged, const char *data_path);
 
 /* Generic info/success message — used by handlers that need to print
  * a one-line confirmation that doesn't carry structured data. In ai
