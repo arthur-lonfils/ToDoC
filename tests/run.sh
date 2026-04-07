@@ -206,6 +206,74 @@ assert_output  "export csv filtered"     "in-progress"           export --status
 assert_fail    "export bad format fails"                         export --format xml
 echo ""
 
+# ── 8c. Projects ────────────────────────────────────────────────
+
+echo "Projects:"
+assert_ok      "add-project basic"                    add-project auth
+assert_ok      "add-project with all options"         add-project ui --desc "Frontend redesign" --color blue --due 2026-09-01
+assert_ok      "add-project minimal"                  add-project backend
+assert_fail    "add-project without name fails"       add-project
+assert_fail    "add-project duplicate name fails"     add-project auth
+
+assert_output  "list-projects shows all"     "3 project(s)"        list-projects
+assert_output  "list-projects shows name"    "auth"                list-projects
+assert_output  "list-projects filter status" "3 project(s)"        list-projects --status active
+
+assert_output  "show-project displays name"        "auth"             show-project auth
+assert_output  "show-project displays description" "Frontend"         show-project ui
+assert_output  "show-project displays color"       "blue"             show-project ui
+assert_output  "show-project displays due date"    "2026-09-01"       show-project ui
+assert_fail    "show-project non-existent fails"                      show-project nope
+assert_fail    "show-project without name fails"                      show-project
+
+assert_ok      "edit-project description"             edit-project auth --desc "Authentication system"
+assert_output  "edit-project desc persisted" "Authentication" show-project auth
+assert_ok      "edit-project status"                  edit-project backend --status completed
+assert_output  "edit-project status persisted" "completed"    show-project backend
+assert_ok      "edit-project color"                   edit-project auth --color red
+assert_fail    "edit-project non-existent fails"      edit-project nope --desc "x"
+echo ""
+
+# ── 8d. Task assignment ─────────────────────────────────────────
+
+echo "Assignment:"
+assert_ok      "add task with --project"              add "Login form" --type feature --project auth
+assert_output  "task auto-assigned to project" "Login form" list --project auth
+assert_ok      "assign existing task to project"      assign 1 auth
+assert_ok      "assign task to second project"        assign 1 ui
+assert_output  "task visible in first project"  "Buy oat milk" list --project auth
+assert_output  "task visible in second project" "Buy oat milk" list --project ui
+assert_ok      "unassign task from project"           unassign 1 ui
+assert_fail    "unassign already unlinked fails"      unassign 1 ui
+assert_fail    "assign non-existent task fails"       assign 999 auth
+assert_fail    "assign to non-existent project fails" assign 1 nope
+assert_fail    "assign without args fails"            assign
+echo ""
+
+# ── 8e. Active project ──────────────────────────────────────────
+
+echo "Active project:"
+assert_ok      "use sets active project"              use auth
+assert_output  "list scoped to active project" "task(s)"     list
+assert_output  "list shows active project info" "auth"       list
+assert_output  "list --all overrides active"   "task(s)"     list --all
+assert_output  "stats scoped to active project" "Total tasks" stats
+assert_ok      "use --clear removes active"           use --clear
+assert_output  "list after clear shows all"   "task(s)"      list
+assert_fail    "use non-existent project fails"       use nope
+echo ""
+
+# ── 8f. Project deletion ────────────────────────────────────────
+
+echo "Project delete:"
+assert_ok      "rm-project deletes project"           rm-project backend
+assert_output  "list-projects after delete"  "2 project(s)" list-projects
+assert_fail    "rm-project non-existent fails"        rm-project backend
+assert_ok      "task survives project deletion"       show 1
+assert_ok      "rm-project clears active if matched"  use auth
+assert_ok      "rm active project"                    rm-project auth
+echo ""
+
 # ── 9. Help / Version ───────���───────────────────────────────────
 
 echo "Help & Version:"

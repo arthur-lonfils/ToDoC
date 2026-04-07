@@ -21,6 +21,14 @@ typedef enum {
     CMD_RM,
     CMD_STATS,
     CMD_EXPORT,
+    CMD_ADD_PROJECT,
+    CMD_LIST_PROJECTS,
+    CMD_SHOW_PROJECT,
+    CMD_EDIT_PROJECT,
+    CMD_RM_PROJECT,
+    CMD_USE,
+    CMD_ASSIGN,
+    CMD_UNASSIGN,
     CMD_HELP,
     CMD_VERSION,
 } command_t;
@@ -47,6 +55,18 @@ typedef struct {
 
     /* For export */
     export_format_t export_format;
+
+    /* For project commands */
+    char *project_name;               /* positional arg for project commands */
+    char *project_color;              /* --color flag */
+    project_status_t *project_status; /* --status for project commands */
+
+    /* For --project flag (task-project association) */
+    char *project; /* --project flag value */
+    int all;       /* --all flag for list/stats/export */
+
+    /* For use --clear */
+    int clear;
 } cli_args_t;
 
 /* Parse argc/argv into a cli_args_t. Returns TODOC_OK or TODOC_ERR_INVALID.

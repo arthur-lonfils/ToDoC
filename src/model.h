@@ -44,6 +44,15 @@ typedef enum {
     STATUS_COUNT
 } status_t;
 
+/* ── Project status ─────────────────────────────────────────── */
+
+typedef enum {
+    PROJECT_ACTIVE = 0,
+    PROJECT_COMPLETED,
+    PROJECT_ARCHIVED,
+    PROJECT_STATUS_COUNT
+} project_status_t;
+
 /* ── Task struct ─────────────────────────────────────────────── */
 
 typedef struct {
@@ -59,15 +68,37 @@ typedef struct {
     char *updated_at; /* heap-allocated ISO-8601, set by DB */
 } task_t;
 
-/* ── Filter for list queries ─────────────────────────────────── */
+/* ── Project struct ─────────────────────────────────────────── */
+
+typedef struct {
+    int64_t id;
+    char *name;        /* heap-allocated, required, unique */
+    char *description; /* heap-allocated, nullable */
+    char *color;       /* heap-allocated, nullable */
+    project_status_t status;
+    char *due_date;   /* heap-allocated "YYYY-MM-DD", nullable */
+    char *created_at; /* heap-allocated ISO-8601, set by DB */
+    char *updated_at; /* heap-allocated ISO-8601, set by DB */
+} project_t;
+
+/* ── Filter for task list queries ──────────────────────────────── */
 
 typedef struct {
     status_t *status; /* NULL = no filter */
     priority_t *priority;
     task_type_t *type;
     char *scope;
-    int limit; /* 0 = no limit */
+    char *project; /* project name filter, NULL = no filter */
+    int all;       /* 1 = show all, bypass active project */
+    int limit;     /* 0 = no limit */
 } task_filter_t;
+
+/* ── Filter for project list queries ───────────────────────────── */
+
+typedef struct {
+    project_status_t *status; /* NULL = no filter */
+    int limit;                /* 0 = no limit */
+} project_filter_t;
 
 /* ── Statistics ──────────────────────────────────────────────── */
 
@@ -83,6 +114,8 @@ typedef struct {
 
 void task_free(task_t *task);
 void task_filter_free(task_filter_t *filter);
+void project_free(project_t *project);
+void project_filter_free(project_filter_t *filter);
 
 /* ── Enum <-> string conversion ──────────────────────────────── */
 
@@ -94,5 +127,8 @@ priority_t str_to_priority(const char *s); /* returns -1 on failure */
 
 const char *status_to_str(status_t s);
 status_t str_to_status(const char *s); /* returns -1 on failure */
+
+const char *project_status_to_str(project_status_t s);
+project_status_t str_to_project_status(const char *s); /* returns -1 on failure */
 
 #endif

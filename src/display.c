@@ -226,6 +226,113 @@ void display_stats(const task_stats_t *stats)
     printf("\n");
 }
 
+/* ── Project helpers ─────────────────────────────────────────── */
+
+static const char *project_status_color(project_status_t s)
+{
+    switch (s) {
+    case PROJECT_ACTIVE:
+        return CLR_GREEN;
+    case PROJECT_COMPLETED:
+        return CLR_DIM;
+    case PROJECT_ARCHIVED:
+        return CLR_DIM;
+    default:
+        return "";
+    }
+}
+
+/* ── Project row (compact) ──────────────────────────────────── */
+
+void display_project_row(const project_t *project)
+{
+    const char *rst = clr(CLR_RESET);
+
+    /* ID */
+    printf("  %s#%-4lld%s ", clr(CLR_DIM), (long long)project->id, rst);
+
+    /* Status */
+    printf("%s%-11s%s ", clr(project_status_color(project->status)),
+           project_status_to_str(project->status), rst);
+
+    /* Name */
+    printf("%s%s%-16s%s ", clr(CLR_BOLD), clr(CLR_CYAN), project->name, rst);
+
+    /* Color tag */
+    if (project->color) {
+        printf("%s[%s]%s ", clr(CLR_MAGENTA), project->color, rst);
+    }
+
+    /* Due date */
+    if (project->due_date) {
+        printf("%s(%s)%s ", clr(CLR_YELLOW), project->due_date, rst);
+    }
+
+    /* Description (truncated) */
+    if (project->description) {
+        printf("%s%s%s", clr(CLR_DIM), project->description, rst);
+    }
+
+    printf("\n");
+}
+
+/* ── Project detail ─────────────────────────────────────────── */
+
+void display_project_detail(const project_t *project, int task_count)
+{
+    const char *rst = clr(CLR_RESET);
+
+    printf("\n");
+    printf("  %s%sProject: %s%s\n", clr(CLR_BOLD), clr(CLR_WHITE), project->name, rst);
+
+    if (project->description) {
+        printf("  %s%s%s\n", clr(CLR_DIM), project->description, rst);
+    }
+    printf("\n");
+
+    printf("  %-12s %s%s%s\n", "Status:", clr(project_status_color(project->status)),
+           project_status_to_str(project->status), rst);
+
+    if (project->color) {
+        printf("  %-12s %s%s%s\n", "Color:", clr(CLR_MAGENTA), project->color, rst);
+    }
+    if (project->due_date) {
+        printf("  %-12s %s%s%s\n", "Due:", clr(CLR_YELLOW), project->due_date, rst);
+    }
+
+    printf("  %-12s %d\n", "Tasks:", task_count);
+
+    printf("\n");
+    printf("  %sCreated:%s  %s\n", clr(CLR_DIM), rst,
+           project->created_at ? project->created_at : "-");
+    printf("  %sUpdated:%s  %s\n", clr(CLR_DIM), rst,
+           project->updated_at ? project->updated_at : "-");
+    printf("\n");
+}
+
+/* ── Project list ───────────────────────────────────────────── */
+
+void display_project_list(const project_t *projects, int count)
+{
+    if (count == 0) {
+        display_info("No projects found.");
+        return;
+    }
+
+    const char *rst = clr(CLR_RESET);
+
+    printf("\n  %s%s%-6s %-11s %-16s %s%s\n", clr(CLR_BOLD), clr(CLR_DIM), "ID", "STATUS", "NAME",
+           "DESCRIPTION", rst);
+    printf("  %s%s%s\n", clr(CLR_DIM),
+           "─────────────────────────────────────────────────────────────", rst);
+
+    for (int i = 0; i < count; i++) {
+        display_project_row(&projects[i]);
+    }
+
+    printf("\n  %s%d project(s)%s\n\n", clr(CLR_DIM), count, rst);
+}
+
 /* ── Feedback messages ───────────────────────────────────────── */
 
 void display_success(const char *fmt, ...)

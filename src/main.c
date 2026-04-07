@@ -48,9 +48,22 @@ int main(int argc, char **argv)
     /* Dispatch table */
     typedef todoc_err_t (*cmd_handler_t)(const cli_args_t *);
     static const cmd_handler_t handlers[] = {
-        [CMD_ADD] = cmd_add,   [CMD_LIST] = cmd_list,   [CMD_SHOW] = cmd_show,
-        [CMD_EDIT] = cmd_edit, [CMD_DONE] = cmd_done,   [CMD_EXPORT] = cmd_export,
-        [CMD_RM] = cmd_rm,     [CMD_STATS] = cmd_stats,
+        [CMD_ADD] = cmd_add,
+        [CMD_LIST] = cmd_list,
+        [CMD_SHOW] = cmd_show,
+        [CMD_EDIT] = cmd_edit,
+        [CMD_DONE] = cmd_done,
+        [CMD_EXPORT] = cmd_export,
+        [CMD_RM] = cmd_rm,
+        [CMD_STATS] = cmd_stats,
+        [CMD_ADD_PROJECT] = cmd_add_project,
+        [CMD_LIST_PROJECTS] = cmd_list_projects,
+        [CMD_SHOW_PROJECT] = cmd_show_project,
+        [CMD_EDIT_PROJECT] = cmd_edit_project,
+        [CMD_RM_PROJECT] = cmd_rm_project,
+        [CMD_USE] = cmd_use,
+        [CMD_ASSIGN] = cmd_assign,
+        [CMD_UNASSIGN] = cmd_unassign,
     };
 
     cmd_handler_t handler = handlers[args.command];
