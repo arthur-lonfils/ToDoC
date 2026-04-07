@@ -19,9 +19,9 @@ int main(int argc, char **argv)
 
     /* Handle commands that don't need the database */
     if (args.command == CMD_HELP) {
-        cli_print_usage();
+        int rc = cli_print_help(args.help_topic);
         cli_args_free(&args);
-        return 0;
+        return rc;
     }
     if (args.command == CMD_VERSION) {
         printf("todoc %s\n", TODOC_VERSION);
