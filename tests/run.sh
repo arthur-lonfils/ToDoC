@@ -735,6 +735,21 @@ SHELL=/usr/bin/fish assert_ok    "completions install (fish)"     completions in
 # Unknown shell
 SHELL=/usr/bin/tcsh assert_fail  "completions install (tcsh)"     completions install
 
+# init silently refreshes an existing completion file (the auto-update
+# path triggered by 'todoc update' which always re-runs 'todoc init').
+# We pre-create a stub file with old content, run init, and check that
+# it was rewritten with the embedded script.
+mkdir -p "$HOME/.local/share/bash-completion/completions"
+echo "OLD-CONTENT" > "$HOME/.local/share/bash-completion/completions/todoc"
+SHELL=/usr/bin/bash assert_ok    "init refreshes existing completion" init
+if grep -q "_todoc" "$HOME/.local/share/bash-completion/completions/todoc"; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  init silently rewrote existing completion\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  init did not refresh existing completion\n"
+fi
+
 # Restore env
 if [ -n "$SAVED_SHELL" ]; then
     export SHELL=$SAVED_SHELL

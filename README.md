@@ -169,8 +169,26 @@ success message still prints.
 ### Tab completion
 
 todoc ships embedded shell-completion scripts for **bash**, **zsh**,
-and **fish**, with a one-command auto-installer that detects your
-shell and drops the file in the right place:
+and **fish**. The first time you run `todoc init` (which `todoc update`
+and the install script call automatically), todoc detects your shell
+and asks once whether to install the completion file:
+
+```
+· Tab completion for bash is not installed.
+  Install it now? It enables Tab completion for commands,
+  flags, project names, label names, and task IDs. [Y/n]
+```
+
+After that:
+
+- **`todoc update`** silently refreshes the installed completion file
+  on every upgrade (so new commands and flags from the new release
+  start completing immediately).
+- If you previously declined, todoc remembers and never asks again
+  (a marker file `~/.todoc/no_completion` lives there).
+- The prompt is skipped on non-TTY stdin (CI, pipes, scripted installs).
+
+You can also do it manually any time:
 
 ```bash
 todoc completions install        # detects $SHELL and installs

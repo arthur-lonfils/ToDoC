@@ -10,6 +10,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Forward declarations for the completion helpers defined at the
+ * bottom of this file. cmd_init uses init_offer_completion to
+ * either silently refresh an existing completion file or, on first
+ * run, prompt the user once to install it. */
+static void init_offer_completion(void);
+
 /* ── init ────────────────────────────────────────────────────── */
 
 todoc_err_t cmd_init(const cli_args_t *args)
@@ -31,6 +37,15 @@ todoc_err_t cmd_init(const cli_args_t *args)
     char *path = todoc_db_path();
     output_init_db(path ? path : "~/.todoc/todoc.db", 0);
     free(path);
+
+    /* After the DB is ready, refresh the user's shell completion
+     * file (silent if it already exists, prompt-once if it doesn't,
+     * skip entirely in ai mode). This is the single hook for both
+     * first install and every subsequent 'todoc update' since the
+     * install script always runs `todoc init` after replacing the
+     * binary. */
+    init_offer_completion();
+
     return TODOC_OK;
 }
 
@@ -1582,4 +1597,105 @@ todoc_err_t cmd_completions(const cli_args_t *args)
     }
     fputs(script->body, stdout);
     return TODOC_OK;
+}
+
+/* ── init → completion offer ─────────────────────────────────── */
+
+/* Called from cmd_init after the DB is ready. Three behaviors:
+ *
+ *   - if a completion file already exists at the auto-detect path
+ *     for the current shell, silently rewrite it with the embedded
+ *     script from this binary (so 'todoc update' picks up new
+ *     commands and flags without the user lifting a finger);
+ *
+ *   - if no file exists and the user hasn't previously declined,
+ *     prompt once "[Y/n]" and either install or write a marker so
+ *     we never ask again;
+ *
+ *   - in ai mode or when $SHELL is unrecognised, do nothing.
+ *
+ * The user can always run 'todoc completions install/uninstall'
+ * manually as the explicit override. */
+static void init_offer_completion(void)
+{
+    /* Never prompt or write files in ai mode — the JSON envelope
+     * for cmd_init has already been emitted and we mustn't add
+     * anything to stdout/stderr. */
+    if (output_is_ai()) {
+        return;
+    }
+
+    const char *shell = todoc_detect_shell();
+    if (!shell) {
+        return; /* unknown shell — nothing we can offer */
+    }
+
+    char *path = completions_install_path(shell);
+    if (!path) {
+        return;
+    }
+
+    /* Silent refresh path: the file already exists, so just rewrite
+     * it with the version embedded in this binary. */
+    if (access(path, F_OK) == 0) {
+        const completion_script_t *script = completions_find(shell);
+        if (script) {
+            FILE *fp = fopen(path, "w");
+            if (fp) {
+                fputs(script->body, fp);
+                fclose(fp);
+            }
+        }
+        free(path);
+        return;
+    }
+
+    /* If the user previously declined, don't ask again. */
+    char *dir = todoc_dir_path();
+    if (!dir) {
+        free(path);
+        return;
+    }
+    char marker_path[PATH_MAX];
+    snprintf(marker_path, sizeof(marker_path), "%s/no_completion", dir);
+    free(dir);
+    if (access(marker_path, F_OK) == 0) {
+        free(path);
+        return;
+    }
+
+    /* If stdin isn't a TTY (CI, pipes, scripted install, test suite),
+     * silently skip — never block on input that no one will type.
+     * The marker is NOT created, so the prompt will fire properly
+     * the next time the user runs init from a real terminal. */
+    if (!isatty(STDIN_FILENO)) {
+        free(path);
+        return;
+    }
+
+    printf("\n· Tab completion for %s is not installed.\n", shell);
+    printf("  Install it now? It enables Tab completion for commands,\n");
+    printf("  flags, project names, label names, and task IDs. [Y/n] ");
+    fflush(stdout);
+
+    char buf[16] = {0};
+    if (!fgets(buf, sizeof(buf), stdin)) {
+        free(path);
+        return;
+    }
+
+    if (buf[0] == 'n' || buf[0] == 'N') {
+        FILE *m = fopen(marker_path, "w");
+        if (m) {
+            fclose(m);
+        }
+        display_info("Skipped. Run 'todoc completions install' anytime to add it.");
+        free(path);
+        return;
+    }
+
+    /* Yes (or empty/Enter): install. install_completion handles its
+     * own success messages and shell-specific hints. */
+    free(path);
+    install_completion(shell);
 }
