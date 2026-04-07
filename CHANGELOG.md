@@ -4,6 +4,19 @@ All notable changes to **todoc** are documented here.
 
 Format based on [Conventional Commits](https://conventionalcommits.org).
 
+## [0.5.0] — 2026-04-07
+
+### Documentation
+
+- Document projects feature and add CLAUDE.md(f9ac0f9)
+
+### Features
+
+- **cli:** Add topic-based help (todoc help <topic>)(eb3b23a)
+- **cli:** Add 'todoc update' subcommand with auto backup and migrate(8ba2ca5)
+- Add subtasks, move command, and abandoned status(39dbe4a)
+- Add labels (many-to-many cross-cutting tags)(bf5960e)
+
 ## [0.4.0] — 2026-04-07
 
 ### Bug Fixes
