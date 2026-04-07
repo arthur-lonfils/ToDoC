@@ -41,8 +41,13 @@ typedef enum {
     STATUS_DONE,
     STATUS_BLOCKED,
     STATUS_CANCELLED,
+    STATUS_ABANDONED,
     STATUS_COUNT
 } status_t;
+
+/* A status is "terminal" if no more work is expected on it. Used to
+ * decide whether a parent task can be marked done. */
+int status_is_terminal(status_t s);
 
 /* ── Project status ─────────────────────────────────────────── */
 
@@ -62,10 +67,11 @@ typedef struct {
     task_type_t type;
     priority_t priority;
     status_t status;
-    char *scope;      /* heap-allocated, nullable */
-    char *due_date;   /* heap-allocated "YYYY-MM-DD", nullable */
-    char *created_at; /* heap-allocated ISO-8601, set by DB */
-    char *updated_at; /* heap-allocated ISO-8601, set by DB */
+    char *scope;       /* heap-allocated, nullable */
+    char *due_date;    /* heap-allocated "YYYY-MM-DD", nullable */
+    char *created_at;  /* heap-allocated ISO-8601, set by DB */
+    char *updated_at;  /* heap-allocated ISO-8601, set by DB */
+    int64_t parent_id; /* 0 = no parent (top-level task) */
 } task_t;
 
 /* ── Project struct ─────────────────────────────────────────── */

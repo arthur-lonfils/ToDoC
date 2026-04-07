@@ -20,9 +20,15 @@ static const char *priority_strings[PRIORITY_COUNT] = {
 };
 
 static const char *status_strings[STATUS_COUNT] = {
-    [STATUS_TODO] = "todo",       [STATUS_IN_PROGRESS] = "in-progress", [STATUS_DONE] = "done",
-    [STATUS_BLOCKED] = "blocked", [STATUS_CANCELLED] = "cancelled",
+    [STATUS_TODO] = "todo",           [STATUS_IN_PROGRESS] = "in-progress",
+    [STATUS_DONE] = "done",           [STATUS_BLOCKED] = "blocked",
+    [STATUS_CANCELLED] = "cancelled", [STATUS_ABANDONED] = "abandoned",
 };
+
+int status_is_terminal(status_t s)
+{
+    return s == STATUS_DONE || s == STATUS_CANCELLED || s == STATUS_ABANDONED;
+}
 
 static const char *project_status_strings[PROJECT_STATUS_COUNT] = {
     [PROJECT_ACTIVE] = "active",

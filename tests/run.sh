@@ -77,6 +77,27 @@ assert_fail() {
     fi
 }
 
+# add_capture: run an 'add' command, expect success, and store the new
+# task's id in $LAST_ID. Useful when subsequent assertions need to
+# reference the id and the id is not predictable due to autoincrement.
+add_capture() {
+    desc="$1"
+    shift
+    if output=$(run add "$@"); then
+        LAST_ID=$(echo "$output" | grep -oE '#[0-9]+' | head -n1 | tr -d '#')
+        if [ -n "$LAST_ID" ]; then
+            PASS=$((PASS + 1))
+            printf "  \033[32mPASS\033[0m  %s (id=%s)\n" "$desc" "$LAST_ID"
+            return 0
+        fi
+    fi
+    rc=$?
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  %s (exit %d)\n" "$desc" "$rc"
+    printf "        %s\n" "$output"
+    return 1
+}
+
 # assert_output: run command, expect exit 0 and output containing a string
 assert_output() {
     desc="$1"
@@ -272,6 +293,63 @@ assert_fail    "rm-project non-existent fails"        rm-project backend
 assert_ok      "task survives project deletion"       show 1
 assert_ok      "rm-project clears active if matched"  use auth
 assert_ok      "rm active project"                    rm-project auth
+echo ""
+
+# ── 8g. Subtasks ────────────────────────────────────────────────
+
+echo "Subtasks:"
+add_capture    "create parent task"                "Big feature" --type feature --priority high
+PARENT_ID=$LAST_ID
+add_capture    "create subtask A"                  "Sub A" --sub "$PARENT_ID"
+SUB_A=$LAST_ID
+add_capture    "create subtask B"                  "Sub B" --sub "$PARENT_ID"
+SUB_B=$LAST_ID
+assert_output  "list shows tree indent"  "└─"      list
+assert_output  "show parent shows children" "Subtasks" show "$PARENT_ID"
+assert_fail    "done parent with open kids fails"  done "$PARENT_ID"
+assert_fail    "edit parent to done blocked"       edit "$PARENT_ID" --status done
+assert_fail    "subtask with bad parent fails"     add "Orphan" --sub 999999
+assert_fail    "subtask of subtask refused"        add "Sub-sub" --sub "$SUB_A"
+
+# Finish children → parent can now be done
+assert_ok      "abandon child A"                   edit "$SUB_A" --status abandoned
+assert_ok      "done child B"                      done "$SUB_B"
+assert_ok      "now done parent works"             done "$PARENT_ID"
+
+# Promote-on-delete
+add_capture    "create another parent"             "Tree root"
+ROOT=$LAST_ID
+add_capture    "create child of new parent"        "Leaf" --sub "$ROOT"
+LEAF=$LAST_ID
+assert_output  "rm parent promotes children" "promoted" rm "$ROOT"
+assert_output  "promoted child still exists" "Leaf"     show "$LEAF"
+
+# Edit --sub none promotes a subtask
+add_capture    "create yet another parent"         "Wrapper"
+WRAP=$LAST_ID
+add_capture    "create child of wrapper"           "Inner" --sub "$WRAP"
+INNER=$LAST_ID
+assert_ok      "promote child via edit --sub none" edit "$INNER" --sub none
+assert_fail    "self-parent forbidden"             edit "$INNER" --sub "$INNER"
+echo ""
+
+# ── 8h. Move ────────────────────────────────────────────────────
+
+echo "Move:"
+assert_ok      "create move target project"        add-project beta --desc "beta project"
+assert_ok      "create move source project"        add-project alpha --desc "alpha project"
+add_capture    "create task in alpha"              "Movable" --project alpha
+MOVABLE=$LAST_ID
+add_capture    "create child of movable"           "Movable child" --sub "$MOVABLE"
+MCHILD=$LAST_ID
+assert_ok      "move parent to beta"               move "$MOVABLE" beta
+assert_output  "task now in beta"        "Movable"        list --project beta
+assert_output  "child also in beta"      "Movable child"  list --project beta
+assert_fail    "moving subtask refused"            move "$MCHILD" beta
+assert_fail    "move to nonexistent project"       move "$MOVABLE" nope
+assert_fail    "move with no target fails"         move "$MOVABLE"
+assert_ok      "move to global"                    move "$MOVABLE" --global
+assert_output  "task no longer in beta"  "No tasks"      list --project beta
 echo ""
 
 # ── 9. Help / Version ───────���───────────────────────────────────

@@ -31,6 +31,41 @@ todoc_err_t cmd_init(const cli_args_t *args)
     return TODOC_OK;
 }
 
+/* ── helpers ─────────────────────────────────────────────────── */
+
+/* Validate that <parent_id> exists and is itself a top-level task
+ * (we only allow one level of nesting). Sets *out_err with the
+ * appropriate code on failure. Returns 0 on success, -1 on failure. */
+static int validate_parent(int64_t parent_id, todoc_err_t *out_err)
+{
+    if (parent_id <= 0) {
+        *out_err = TODOC_ERR_INVALID;
+        display_error("Invalid parent task id.");
+        return -1;
+    }
+    task_t parent = {0};
+    todoc_err_t err = db_task_get(parent_id, &parent);
+    if (err == TODOC_ERR_NOT_FOUND) {
+        display_error("Parent task #%lld not found.", (long long)parent_id);
+        *out_err = err;
+        return -1;
+    }
+    if (err != TODOC_OK) {
+        display_error("Failed to load parent task: %s", db_last_error());
+        *out_err = err;
+        return -1;
+    }
+    if (parent.parent_id > 0) {
+        display_error("Task #%lld is itself a subtask. Only one level of nesting is allowed.",
+                      (long long)parent_id);
+        task_free(&parent);
+        *out_err = TODOC_ERR_INVALID;
+        return -1;
+    }
+    task_free(&parent);
+    return 0;
+}
+
 /* ── add ─────────────────────────────────────────────────────── */
 
 todoc_err_t cmd_add(const cli_args_t *args)
@@ -41,6 +76,18 @@ todoc_err_t cmd_add(const cli_args_t *args)
         return TODOC_ERR_INVALID;
     }
 
+    /* If --sub <parent> was given, validate it before inserting. */
+    if (args->parent_set) {
+        if (args->parent_id <= 0) {
+            display_error("--sub requires a parent task id.");
+            return TODOC_ERR_INVALID;
+        }
+        todoc_err_t verr = TODOC_OK;
+        if (validate_parent(args->parent_id, &verr) != 0) {
+            return verr;
+        }
+    }
+
     task_t task = {0};
     task.title = args->title; /* borrowed, not freed by task_free here */
     task.description = args->description;
@@ -49,6 +96,7 @@ todoc_err_t cmd_add(const cli_args_t *args)
     task.status = STATUS_TODO;
     task.scope = args->scope;
     task.due_date = args->due_date;
+    task.parent_id = args->parent_set && args->parent_id > 0 ? args->parent_id : 0;
 
     int64_t new_id = 0;
     todoc_err_t err = db_task_insert(&task, &new_id);
@@ -142,6 +190,15 @@ todoc_err_t cmd_show(const cli_args_t *args)
     }
 
     display_task_detail(&task);
+
+    /* Show children if any */
+    task_t *children = NULL;
+    int n_children = 0;
+    if (db_task_get_children(args->task_id, &children, &n_children) == TODOC_OK && n_children > 0) {
+        display_subtask_list(children, n_children);
+    }
+    db_task_list_free(children, n_children);
+
     task_free(&task);
     return TODOC_OK;
 }
@@ -194,6 +251,58 @@ todoc_err_t cmd_edit(const cli_args_t *args)
         free(task.due_date);
         task.due_date = todoc_strdup(args->due_date);
     }
+    if (args->parent_set) {
+        if (args->parent_id < 0) {
+            /* --sub none → promote to top-level */
+            task.parent_id = 0;
+        } else {
+            if (args->parent_id == args->task_id) {
+                display_error("A task cannot be its own parent.");
+                task_free(&task);
+                return TODOC_ERR_INVALID;
+            }
+            /* Refuse to nest a task that already has children */
+            int kids = db_task_count_open_children(args->task_id);
+            task_t check = {0};
+            if (db_task_get(args->task_id, &check) == TODOC_OK) {
+                /* Use a separate count covering ALL children, not just open. */
+                task_t *all_children = NULL;
+                int n_children = 0;
+                if (db_task_get_children(args->task_id, &all_children, &n_children) == TODOC_OK) {
+                    if (n_children > 0) {
+                        display_error("Task #%lld has %d child task(s); it cannot itself become a "
+                                      "subtask.",
+                                      (long long)args->task_id, n_children);
+                        db_task_list_free(all_children, n_children);
+                        task_free(&check);
+                        task_free(&task);
+                        return TODOC_ERR_INVALID;
+                    }
+                    db_task_list_free(all_children, n_children);
+                }
+                task_free(&check);
+            }
+            (void)kids;
+            todoc_err_t verr = TODOC_OK;
+            if (validate_parent(args->parent_id, &verr) != 0) {
+                task_free(&task);
+                return verr;
+            }
+            task.parent_id = args->parent_id;
+        }
+    }
+
+    /* If the user is moving the task to STATUS_DONE via --status,
+     * enforce the "all children must be terminal" rule. */
+    if (args->status && *args->status == STATUS_DONE) {
+        int open = db_task_count_open_children(args->task_id);
+        if (open > 0) {
+            display_error("Task #%lld has %d open subtask(s); finish or abandon them first.",
+                          (long long)args->task_id, open);
+            task_free(&task);
+            return TODOC_ERR_INVALID;
+        }
+    }
 
     err = db_task_update(&task);
     if (err != TODOC_OK) {
@@ -214,6 +323,13 @@ todoc_err_t cmd_done(const cli_args_t *args)
     if (args->task_id <= 0) {
         display_error("Task ID is required.");
         display_info("Usage: todoc done <id>");
+        return TODOC_ERR_INVALID;
+    }
+
+    int open = db_task_count_open_children(args->task_id);
+    if (open > 0) {
+        display_error("Task #%lld has %d open subtask(s); finish or abandon them first.",
+                      (long long)args->task_id, open);
         return TODOC_ERR_INVALID;
     }
 
@@ -241,17 +357,29 @@ todoc_err_t cmd_rm(const cli_args_t *args)
         return TODOC_ERR_INVALID;
     }
 
+    /* Check for children before deleting so we can warn the user that
+     * they will be promoted to top-level tasks (ON DELETE SET NULL). */
+    task_t *children = NULL;
+    int n_children = 0;
+    db_task_get_children(args->task_id, &children, &n_children);
+
     todoc_err_t err = db_task_delete(args->task_id);
     if (err == TODOC_ERR_NOT_FOUND) {
         display_error("Task #%lld not found.", (long long)args->task_id);
+        db_task_list_free(children, n_children);
         return err;
     }
     if (err != TODOC_OK) {
         display_error("Failed to delete task: %s", db_last_error());
+        db_task_list_free(children, n_children);
         return err;
     }
 
     display_success("Task #%lld deleted.", (long long)args->task_id);
+    if (n_children > 0) {
+        display_info("%d subtask(s) promoted to top-level.", n_children);
+    }
+    db_task_list_free(children, n_children);
     return TODOC_OK;
 }
 
@@ -637,6 +765,107 @@ todoc_err_t cmd_unassign(const cli_args_t *args)
 
     display_success("Task #%lld removed from project '%s'.", (long long)args->task_id,
                     args->project_name);
+    return TODOC_OK;
+}
+
+/* ── move ────────────────────────────────────────────────────── */
+
+todoc_err_t cmd_move(const cli_args_t *args)
+{
+    if (args->task_id <= 0) {
+        display_error("Task ID is required.");
+        display_info("Usage: todoc move <id> <project>");
+        display_info("       todoc move <id> --global");
+        return TODOC_ERR_INVALID;
+    }
+    if (!args->global && !args->project_name) {
+        display_error("Either a target <project> or --global is required.");
+        display_info("Usage: todoc move <id> <project>");
+        display_info("       todoc move <id> --global");
+        return TODOC_ERR_INVALID;
+    }
+    if (args->global && args->project_name) {
+        display_error("--global and a project name are mutually exclusive.");
+        return TODOC_ERR_INVALID;
+    }
+
+    /* Load the task to check its parent_id and existence. */
+    task_t task = {0};
+    todoc_err_t err = db_task_get(args->task_id, &task);
+    if (err == TODOC_ERR_NOT_FOUND) {
+        display_error("Task #%lld not found.", (long long)args->task_id);
+        return err;
+    }
+    if (err != TODOC_OK) {
+        display_error("Failed to load task: %s", db_last_error());
+        return err;
+    }
+
+    if (task.parent_id > 0) {
+        display_error("Task #%lld is a subtask of #%lld. Move the parent instead.",
+                      (long long)args->task_id, (long long)task.parent_id);
+        task_free(&task);
+        return TODOC_ERR_INVALID;
+    }
+    task_free(&task);
+
+    /* Resolve target project (or NULL for --global). */
+    project_t target = {0};
+    int64_t target_id = 0;
+    int has_target = 0;
+    if (args->project_name) {
+        err = db_project_get_by_name(args->project_name, &target);
+        if (err == TODOC_ERR_NOT_FOUND) {
+            display_error("Project '%s' not found.", args->project_name);
+            return err;
+        }
+        if (err != TODOC_OK) {
+            display_error("Failed to load project: %s", db_last_error());
+            return err;
+        }
+        target_id = target.id;
+        has_target = 1;
+    }
+
+    /* Re-assign the task itself */
+    err = db_task_set_projects(args->task_id, has_target ? &target_id : NULL, has_target ? 1 : 0);
+    if (err != TODOC_OK) {
+        display_error("Failed to move task: %s", db_last_error());
+        if (has_target) {
+            project_free(&target);
+        }
+        return err;
+    }
+
+    /* Cascade to children */
+    task_t *children = NULL;
+    int n_children = 0;
+    if (db_task_get_children(args->task_id, &children, &n_children) == TODOC_OK) {
+        for (int i = 0; i < n_children; i++) {
+            db_task_set_projects(children[i].id, has_target ? &target_id : NULL,
+                                 has_target ? 1 : 0);
+        }
+    }
+
+    if (has_target) {
+        if (n_children > 0) {
+            display_success("Task #%lld and %d subtask(s) moved to project '%s'.",
+                            (long long)args->task_id, n_children, target.name);
+        } else {
+            display_success("Task #%lld moved to project '%s'.", (long long)args->task_id,
+                            target.name);
+        }
+        project_free(&target);
+    } else {
+        if (n_children > 0) {
+            display_success("Task #%lld and %d subtask(s) removed from all projects.",
+                            (long long)args->task_id, n_children);
+        } else {
+            display_success("Task #%lld removed from all projects.", (long long)args->task_id);
+        }
+    }
+
+    db_task_list_free(children, n_children);
     return TODOC_OK;
 }
 
