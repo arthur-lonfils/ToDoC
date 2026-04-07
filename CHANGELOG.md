@@ -4,6 +4,17 @@ All notable changes to **todoc** are documented here.
 
 Format based on [Conventional Commits](https://conventionalcommits.org).
 
+## [0.9.0] — 2026-04-07
+
+### Bug Fixes
+
+- Auto-install completion from install.sh + harden refresh tests(e75547b)
+
+### Features
+
+- **cli:** Shell tab-completion (bash + zsh + fish) with auto-install(2f3b2ca)
+- **cli:** Auto-offer/refresh tab completion from todoc init(e82ea1a)
+
 ## [0.8.0] — 2026-04-07
 
 ### Features
