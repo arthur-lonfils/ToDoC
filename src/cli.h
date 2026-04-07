@@ -67,6 +67,9 @@ typedef struct {
 
     /* For use --clear */
     int clear;
+
+    /* For 'help <topic>' */
+    char *help_topic;
 } cli_args_t;
 
 /* Parse argc/argv into a cli_args_t. Returns TODOC_OK or TODOC_ERR_INVALID.
@@ -76,7 +79,14 @@ todoc_err_t cli_parse(int argc, char **argv, cli_args_t *out);
 /* Free heap-allocated members of cli_args_t */
 void cli_args_free(cli_args_t *args);
 
-/* Print usage/help text to stdout */
+/* Print usage/help text to stdout. If topic is NULL, prints the top-level
+ * overview. Otherwise prints help for the named topic (e.g. "task",
+ * "project", "export") or a specific command name. Returns 0 on success,
+ * non-zero if the topic is unknown. */
+int cli_print_help(const char *topic);
+
+/* Convenience: prints the top-level overview (equivalent to
+ * cli_print_help(NULL)). */
 void cli_print_usage(void);
 
 #endif

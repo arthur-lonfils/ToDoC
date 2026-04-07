@@ -320,7 +320,15 @@ todoc_err_t cli_parse(int argc, char **argv, cli_args_t *out)
         return TODOC_ERR_INVALID;
     }
 
-    if (out->command == CMD_HELP || out->command == CMD_VERSION || out->command == CMD_INIT) {
+    if (out->command == CMD_VERSION || out->command == CMD_INIT) {
+        return TODOC_OK;
+    }
+
+    /* 'help' takes an optional positional topic */
+    if (out->command == CMD_HELP) {
+        if (argc >= 3 && !is_flag(argv[2])) {
+            out->help_topic = todoc_strdup(argv[2]);
+        }
         return TODOC_OK;
     }
 
@@ -346,17 +354,19 @@ void cli_args_free(cli_args_t *args)
     free(args->project_color);
     free(args->project_status);
     free(args->project);
+    free(args->help_topic);
     memset(args, 0, sizeof(*args));
 }
 
 /* ── Usage ───────────────────────────────────────────────────── */
 
-void cli_print_usage(void)
+static void print_overview(void)
 {
     printf("todoc %s — A command-line task manager\n"
            "\n"
            "Usage:\n"
            "  todoc <command> [options]\n"
+           "  todoc help <topic>           Show focused help for a topic\n"
            "\n"
            "Task Commands:\n"
            "  init                       Initialize the task database\n"
@@ -381,10 +391,39 @@ void cli_print_usage(void)
            "  unassign <id> <project>    Remove task from project\n"
            "\n"
            "Other:\n"
-           "  help                       Show this help message\n"
+           "  help [topic]               Show help (run 'todoc help help' for topics)\n"
            "  version                    Show version\n"
            "\n"
-           "Task Options:\n"
+           "Help Topics:\n"
+           "  todoc help task            Task commands and options\n"
+           "  todoc help project         Project commands and options\n"
+           "  todoc help export          Export formats and filters\n"
+           "  todoc help <command>       Help for a specific command (e.g. 'add', 'use')\n"
+           "\n"
+           "Examples:\n"
+           "  todoc init\n"
+           "  todoc add \"Fix login bug\" --type bug --priority high --project auth\n"
+           "  todoc list --status todo --priority critical\n"
+           "  todoc add-project auth --desc \"Auth system\" --color blue\n"
+           "  todoc use auth\n",
+           TODOC_VERSION);
+}
+
+static void print_task_topic(void)
+{
+    printf("todoc — Task commands\n"
+           "\n"
+           "Commands:\n"
+           "  init                       Initialize the task database\n"
+           "  add <title> [options]      Add a new task\n"
+           "  list [filters]             List tasks (alias: ls)\n"
+           "  show <id>                  Show full task details\n"
+           "  edit <id> [options]        Edit an existing task\n"
+           "  done <id>                  Mark a task as done\n"
+           "  rm <id>                    Delete a task (aliases: remove, delete)\n"
+           "  stats                      Show task statistics\n"
+           "\n"
+           "Options:\n"
            "  --title <text>             Task title (positional for add)\n"
            "  --desc <text>              Task description\n"
            "  --type, -t <type>          bug, feature, chore, idea\n"
@@ -392,31 +431,220 @@ void cli_print_usage(void)
            "  --status, -s <status>      todo, in-progress, done, blocked, cancelled\n"
            "  --scope <tag>              Scope tag\n"
            "  --due <YYYY-MM-DD>         Due date\n"
-           "  --format, -f <format>      Export format: csv (default), json\n"
            "  --limit <n>                Limit list results\n"
            "  --project, -P <name>       Filter by or assign to project\n"
            "  --all                      Show all tasks (bypass active project)\n"
            "\n"
-           "Project Options:\n"
+           "Examples:\n"
+           "  todoc add \"Fix login bug\" --type bug --priority high\n"
+           "  todoc list --status todo --priority critical\n"
+           "  todoc edit 3 --priority low --due 2026-04-15\n"
+           "  todoc done 3\n"
+           "  todoc rm 3\n");
+}
+
+static void print_project_topic(void)
+{
+    printf("todoc — Project commands\n"
+           "\n"
+           "Projects group tasks. Set an active project with 'todoc use <name>'\n"
+           "and 'list', 'stats', and 'export' will scope to it automatically.\n"
+           "Use --all on any of those to bypass the active project for one\n"
+           "command. Tasks and projects have a many-to-many relationship.\n"
+           "\n"
+           "Commands:\n"
+           "  add-project <name>         Create a new project\n"
+           "  list-projects              List projects (filter with --status)\n"
+           "  show-project <name>        Show project details + task count\n"
+           "  edit-project <name>        Edit a project\n"
+           "  rm-project <name>          Delete a project (tasks survive)\n"
+           "  use <name>                 Set active project context\n"
+           "  use --clear                Clear active project\n"
+           "  assign <id> <project>      Link task to project\n"
+           "  unassign <id> <project>    Remove task from project\n"
+           "\n"
+           "Options:\n"
            "  --desc <text>              Project description\n"
            "  --color <tag>              Color/label tag\n"
            "  --status, -s <status>      active, completed, archived\n"
            "  --due <YYYY-MM-DD>         Project due date\n"
            "\n"
            "Examples:\n"
-           "  todoc init\n"
-           "  todoc add \"Fix login bug\" --type bug --priority high --project auth\n"
-           "  todoc list --status todo --priority critical\n"
-           "  todoc edit 3 --priority low --due 2026-04-15\n"
-           "  todoc done 3\n"
-           "  todoc rm 3\n"
-           "  todoc export --format json > tasks.json\n"
-           "\n"
-           "  todoc add-project auth --desc \"Auth system\" --color blue\n"
+           "  todoc add-project auth --desc \"Auth system\" --color blue --due 2026-06-01\n"
+           "  todoc add \"Fix login\" --type bug --project auth\n"
            "  todoc use auth\n"
-           "  todoc list                 (shows only auth tasks)\n"
-           "  todoc list --all           (shows all tasks)\n"
+           "  todoc list                  (shows only auth tasks)\n"
+           "  todoc list --all            (shows all tasks)\n"
            "  todoc assign 3 auth\n"
-           "  todoc use --clear\n",
-           TODOC_VERSION);
+           "  todoc unassign 3 auth\n"
+           "  todoc edit-project auth --status completed\n"
+           "  todoc use --clear\n");
+}
+
+static void print_export_topic(void)
+{
+    printf("todoc — Export\n"
+           "\n"
+           "Export tasks to CSV or JSON on stdout. All task filters apply,\n"
+           "and the active project (if set) scopes the output unless --all\n"
+           "is given.\n"
+           "\n"
+           "Usage:\n"
+           "  todoc export [filters] [--format csv|json]\n"
+           "\n"
+           "Options:\n"
+           "  --format, -f <format>      csv (default) or json\n"
+           "  --status, -s <status>      Filter by status\n"
+           "  --type, -t <type>          Filter by type\n"
+           "  --priority, -p <priority>  Filter by priority\n"
+           "  --scope <tag>              Filter by scope\n"
+           "  --project, -P <name>       Filter by project\n"
+           "  --all                      Bypass active project\n"
+           "\n"
+           "Examples:\n"
+           "  todoc export                                  (csv to stdout)\n"
+           "  todoc export --format json > tasks.json\n"
+           "  todoc export --status done --format csv > done.csv\n"
+           "  todoc export --project auth --format json\n");
+}
+
+/* Per-command focused help. Returns 1 if printed, 0 if no match. */
+static int print_command_topic(const char *cmd)
+{
+    if (strcmp(cmd, "init") == 0) {
+        printf("todoc init — Initialize the task database\n"
+               "\n"
+               "Creates ~/.todoc/todoc.db if missing and applies any pending\n"
+               "schema migrations. Idempotent — safe to re-run after upgrades.\n");
+    } else if (strcmp(cmd, "add") == 0) {
+        printf("todoc add <title> [options] — Add a new task\n"
+               "\n"
+               "Options:\n"
+               "  --desc <text>              Description\n"
+               "  --type, -t <type>          bug, feature, chore, idea\n"
+               "  --priority, -p <priority>  critical, high, medium, low\n"
+               "  --scope <tag>              Scope tag\n"
+               "  --due <YYYY-MM-DD>         Due date\n"
+               "  --project, -P <name>       Assign to project on creation\n"
+               "\n"
+               "If an active project is set, new tasks are auto-assigned to it.\n"
+               "\n"
+               "Examples:\n"
+               "  todoc add \"Fix login\" --type bug --priority high\n"
+               "  todoc add \"Add OAuth\" --type feature --project auth\n");
+    } else if (strcmp(cmd, "list") == 0 || strcmp(cmd, "ls") == 0) {
+        printf("todoc list [filters] — List tasks (alias: ls)\n"
+               "\n"
+               "When an active project is set, only its tasks are shown.\n"
+               "Use --all to bypass the active project.\n"
+               "\n"
+               "Filters:\n"
+               "  --status, -s <status>      todo, in-progress, done, blocked, cancelled\n"
+               "  --type, -t <type>          bug, feature, chore, idea\n"
+               "  --priority, -p <priority>  critical, high, medium, low\n"
+               "  --scope <tag>              Filter by scope\n"
+               "  --project, -P <name>       Filter by project\n"
+               "  --all                      Bypass active project\n"
+               "  --limit <n>                Limit number of results\n");
+    } else if (strcmp(cmd, "show") == 0) {
+        printf("todoc show <id> — Show full task details\n");
+    } else if (strcmp(cmd, "edit") == 0) {
+        printf("todoc edit <id> [options] — Edit an existing task\n"
+               "\n"
+               "Any task option (--title, --desc, --type, --priority, --status,\n"
+               "--scope, --due) can be passed; only the supplied fields change.\n");
+    } else if (strcmp(cmd, "done") == 0) {
+        printf("todoc done <id> — Mark a task as done\n");
+    } else if (strcmp(cmd, "rm") == 0 || strcmp(cmd, "remove") == 0 || strcmp(cmd, "delete") == 0) {
+        printf("todoc rm <id> — Delete a task (aliases: remove, delete)\n");
+    } else if (strcmp(cmd, "stats") == 0) {
+        printf("todoc stats — Show task statistics\n"
+               "\n"
+               "Counts tasks by status, priority, and type. Scoped to the active\n"
+               "project when one is set.\n");
+    } else if (strcmp(cmd, "export") == 0) {
+        print_export_topic();
+    } else if (strcmp(cmd, "add-project") == 0) {
+        printf("todoc add-project <name> [options] — Create a new project\n"
+               "\n"
+               "Options:\n"
+               "  --desc <text>              Description\n"
+               "  --color <tag>              Color/label tag\n"
+               "  --due <YYYY-MM-DD>         Due date\n"
+               "  --status, -s <status>      active (default), completed, archived\n");
+    } else if (strcmp(cmd, "list-projects") == 0) {
+        printf("todoc list-projects [--status <status>] — List projects\n");
+    } else if (strcmp(cmd, "show-project") == 0) {
+        printf("todoc show-project <name> — Show project details + task count\n");
+    } else if (strcmp(cmd, "edit-project") == 0) {
+        printf("todoc edit-project <name> [options] — Edit a project\n"
+               "\n"
+               "Options: --desc, --color, --due, --status\n");
+    } else if (strcmp(cmd, "rm-project") == 0) {
+        printf("todoc rm-project <name> — Delete a project\n"
+               "\n"
+               "Tasks belonging to the project are NOT deleted; only the\n"
+               "project and its task associations are removed.\n");
+    } else if (strcmp(cmd, "use") == 0) {
+        printf("todoc use <name> — Set the active project context\n"
+               "todoc use --clear — Clear the active project\n"
+               "\n"
+               "While an active project is set, 'list', 'stats', and 'export'\n"
+               "are scoped to it. Use --all on any of those to bypass it.\n"
+               "New tasks created with 'todoc add' are auto-assigned to the\n"
+               "active project.\n");
+    } else if (strcmp(cmd, "assign") == 0) {
+        printf("todoc assign <id> <project> — Link a task to a project\n"
+               "\n"
+               "A task may belong to multiple projects. Re-assigning is a no-op.\n");
+    } else if (strcmp(cmd, "unassign") == 0) {
+        printf("todoc unassign <id> <project> — Remove a task from a project\n");
+    } else if (strcmp(cmd, "help") == 0) {
+        printf("todoc help [topic] — Show help\n"
+               "\n"
+               "Topics:\n"
+               "  task        Task commands and options\n"
+               "  project     Project commands and options\n"
+               "  export      Export formats and filters\n"
+               "  <command>   Any command name (e.g. 'add', 'use', 'edit-project')\n");
+    } else if (strcmp(cmd, "version") == 0) {
+        printf("todoc version — Show the installed version\n");
+    } else {
+        return 0;
+    }
+    return 1;
+}
+
+int cli_print_help(const char *topic)
+{
+    if (!topic) {
+        print_overview();
+        return 0;
+    }
+
+    if (strcmp(topic, "task") == 0 || strcmp(topic, "tasks") == 0) {
+        print_task_topic();
+        return 0;
+    }
+    if (strcmp(topic, "project") == 0 || strcmp(topic, "projects") == 0) {
+        print_project_topic();
+        return 0;
+    }
+    if (strcmp(topic, "export") == 0) {
+        print_export_topic();
+        return 0;
+    }
+
+    if (print_command_topic(topic)) {
+        return 0;
+    }
+
+    fprintf(stderr, "todoc: unknown help topic '%s'\n", topic);
+    fprintf(stderr, "Run 'todoc help' for available topics.\n");
+    return 1;
+}
+
+void cli_print_usage(void)
+{
+    print_overview();
 }
