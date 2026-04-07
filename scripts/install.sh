@@ -136,6 +136,29 @@ else
     fi
 fi
 
+# ── Shell completion ─────────────────────────────────────────────
+#
+# When running via curl ... | sh, stdin is not a TTY, so todoc init's
+# interactive prompt would silently skip itself. We auto-install the
+# completion file from here instead, taking "yes" as the default — but
+# we respect the no_completion marker that the user can drop to opt
+# out persistently.
+
+if [ -f "$HOME/.todoc/no_completion" ]; then
+    info "Skipping shell completion (you opted out previously)."
+elif [ -z "${SHELL:-}" ]; then
+    warn "\$SHELL is unset; skipping shell completion."
+    warn "Run 'todoc completions install' from a terminal to add it."
+else
+    if "$BIN_DIR/todoc" completions install > /dev/null 2>&1; then
+        info "Installed shell completion for $(basename "$SHELL")."
+        info "Restart your shell, or source the new completion file."
+    else
+        warn "Could not install shell completion automatically."
+        warn "Run 'todoc completions install' from a terminal to add it."
+    fi
+fi
+
 # ── PATH hint ────────────────────────────────────────────────────
 
 case ":$PATH:" in

@@ -737,18 +737,41 @@ SHELL=/usr/bin/tcsh assert_fail  "completions install (tcsh)"     completions in
 
 # init silently refreshes an existing completion file (the auto-update
 # path triggered by 'todoc update' which always re-runs 'todoc init').
-# We pre-create a stub file with old content, run init, and check that
-# it was rewritten with the embedded script.
+# We pre-create a stub file with marker content, run init, and verify
+# (a) the new embedded script is in there and (b) the marker content
+# is gone — proving the old content was REPLACED, not appended-to.
 mkdir -p "$HOME/.local/share/bash-completion/completions"
-echo "OLD-CONTENT" > "$HOME/.local/share/bash-completion/completions/todoc"
+echo "STALE-OLD-CONTENT-FROM-PREVIOUS-RELEASE" > "$HOME/.local/share/bash-completion/completions/todoc"
 SHELL=/usr/bin/bash assert_ok    "init refreshes existing completion" init
 if grep -q "_todoc" "$HOME/.local/share/bash-completion/completions/todoc"; then
     PASS=$((PASS + 1))
-    printf "  \033[32mPASS\033[0m  init silently rewrote existing completion\n"
+    printf "  \033[32mPASS\033[0m  refresh wrote the new embedded script\n"
 else
     FAIL=$((FAIL + 1))
-    printf "  \033[31mFAIL\033[0m  init did not refresh existing completion\n"
+    printf "  \033[31mFAIL\033[0m  refresh did not write the new script\n"
 fi
+if ! grep -q "STALE-OLD-CONTENT" "$HOME/.local/share/bash-completion/completions/todoc"; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  refresh removed the stale content\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  refresh left stale content in the file\n"
+fi
+
+# init respects the no_completion marker (user previously said no).
+# Pre-create the marker, remove the completion file, run init, and
+# verify the file was NOT recreated.
+rm -f "$HOME/.local/share/bash-completion/completions/todoc"
+touch "$HOME/.todoc/no_completion"
+SHELL=/usr/bin/bash assert_ok    "init with marker present"      init
+if [ ! -f "$HOME/.local/share/bash-completion/completions/todoc" ]; then
+    PASS=$((PASS + 1))
+    printf "  \033[32mPASS\033[0m  init respects no_completion marker\n"
+else
+    FAIL=$((FAIL + 1))
+    printf "  \033[31mFAIL\033[0m  init wrote completion despite marker\n"
+fi
+rm -f "$HOME/.todoc/no_completion"
 
 # Restore env
 if [ -n "$SAVED_SHELL" ]; then
