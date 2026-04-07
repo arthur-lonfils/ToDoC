@@ -47,6 +47,7 @@ static const cmd_entry_t cmd_table[] = {
     {"label", CMD_LABEL},
     {"unlabel", CMD_UNLABEL},
     {"changelog", CMD_CHANGELOG},
+    {"mode", CMD_MODE},
     {NULL, CMD_NONE},
 };
 
@@ -320,6 +321,8 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
             out->changelog_since = todoc_strdup(val);
         } else if (strcmp(arg, "--list") == 0) {
             out->changelog_list = 1;
+        } else if (strcmp(arg, "--json") == 0 || strcmp(arg, "-j") == 0) {
+            out->output_json = 1;
         } else if (!is_flag(arg)) {
             /* Positional argument handling depends on command */
             if (out->command == CMD_ADD && !out->title) {
@@ -358,6 +361,8 @@ static todoc_err_t parse_flags(int argc, char **argv, int start, cli_args_t *out
                 out->label_name = todoc_strdup(arg);
             } else if (out->command == CMD_CHANGELOG && !out->changelog_version) {
                 out->changelog_version = todoc_strdup(arg);
+            } else if (out->command == CMD_MODE && !out->mode_target) {
+                out->mode_target = todoc_strdup(arg);
             } else {
                 fprintf(stderr, "todoc: unexpected argument '%s'\n", arg);
                 return TODOC_ERR_INVALID;
@@ -428,6 +433,7 @@ void cli_args_free(cli_args_t *args)
     free(args->labels);
     free(args->changelog_version);
     free(args->changelog_since);
+    free(args->mode_target);
     memset(args, 0, sizeof(*args));
 }
 
@@ -477,6 +483,10 @@ static void print_overview(void)
            "  version                    Show version\n"
            "  update                     Update todoc to the latest release\n"
            "  changelog [version]        Show release notes (--all, --since, --list)\n"
+           "  mode [ai|user]             Switch output mode (JSON for LLM agents)\n"
+           "\n"
+           "Global flags:\n"
+           "  --json, -j                 One-shot ai mode for the next command\n"
            "\n"
            "Help Topics:\n"
            "  todoc help task            Task commands and options\n"
@@ -763,6 +773,29 @@ static int print_command_topic(const char *cmd)
                "The label is auto-created if it does not already exist.\n");
     } else if (strcmp(cmd, "unlabel") == 0) {
         printf("todoc unlabel <id> <label> — Detach a label from a task\n");
+    } else if (strcmp(cmd, "mode") == 0) {
+        printf("todoc mode [ai|user] — Switch output mode\n"
+               "\n"
+               "todoc has two output modes:\n"
+               "  user (default)  colored, human-formatted output\n"
+               "  ai              structured JSON envelopes for LLM-driven agents\n"
+               "\n"
+               "Usage:\n"
+               "  todoc mode               Show the current mode\n"
+               "  todoc mode ai            Switch to ai mode persistently\n"
+               "  todoc mode user          Switch back to user mode\n"
+               "\n"
+               "Resolution order (highest precedence first):\n"
+               "  1. The --json flag (one-shot ai mode for one command)\n"
+               "  2. The TODOC_MODE env var (ai or user)\n"
+               "  3. The persistent ~/.todoc/mode file\n"
+               "  4. Default: user\n"
+               "\n"
+               "In ai mode:\n"
+               "  - stdout contains exactly one JSON envelope per command\n"
+               "  - stderr is empty on success, one JSON error envelope on failure\n"
+               "  - colors, info messages, warnings, and the update-check\n"
+               "    notification are all suppressed\n");
     } else if (strcmp(cmd, "changelog") == 0) {
         printf("todoc changelog [version] — Show release notes\n"
                "\n"

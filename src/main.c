@@ -2,6 +2,7 @@
 #include "commands.h"
 #include "db.h"
 #include "display.h"
+#include "output.h"
 #include "update_check.h"
 
 #include <stdio.h>
@@ -18,9 +19,15 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    /* Resolve output mode (--json > TODOC_MODE > ~/.todoc/mode > user)
+     * before any handler runs so display_* and output_* both know which
+     * branch to take. */
+    output_init(args.output_json);
+
     /* Kick off the background update-check refresh as early as possible
      * so the child has the most time to finish before the user runs
-     * todoc again. No-op for noisy commands or when disabled. */
+     * todoc again. No-op for noisy commands, in ai mode, or when
+     * disabled by env var. */
     update_check_refresh_async(args.command);
 
     /* Handle commands that don't need the database */
@@ -57,9 +64,17 @@ int main(int argc, char **argv)
         return (err == TODOC_OK) ? 0 : 1;
     }
 
+    /* mode is a meta-command — no DB, no need for output_init magic
+     * (cmd_mode handles its own output) */
+    if (args.command == CMD_MODE) {
+        err = cmd_mode(&args);
+        cli_args_free(&args);
+        return (err == TODOC_OK) ? 0 : 1;
+    }
+
     /* All other commands need the database open */
     if (db_open() != TODOC_OK) {
-        display_error("Failed to open database: %s", db_last_error());
+        output_error("dispatch", "db_error", "Failed to open database: %s", db_last_error());
         display_info("Run 'todoc init' to create the database.");
         cli_args_free(&args);
         return 1;
@@ -96,7 +111,7 @@ int main(int argc, char **argv)
     if (handler) {
         err = handler(&args);
     } else {
-        display_error("Internal error: unhandled command.");
+        output_error("dispatch", "internal", "Internal error: unhandled command.");
         err = TODOC_ERR_INVALID;
     }
 

@@ -1,4 +1,5 @@
 #include "export.h"
+#include "json.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -90,42 +91,6 @@ void export_tasks_csv(const task_t *tasks, int count)
     }
 }
 
-/* ── JSON helpers ────────────────────────────────────────────── */
-
-/* Print a JSON string value, escaping special characters */
-static void json_string(const char *s)
-{
-    if (!s) {
-        printf("null");
-        return;
-    }
-
-    fputc('"', stdout);
-    for (const char *p = s; *p; p++) {
-        switch (*p) {
-        case '"':
-            fputs("\\\"", stdout);
-            break;
-        case '\\':
-            fputs("\\\\", stdout);
-            break;
-        case '\n':
-            fputs("\\n", stdout);
-            break;
-        case '\r':
-            fputs("\\r", stdout);
-            break;
-        case '\t':
-            fputs("\\t", stdout);
-            break;
-        default:
-            fputc(*p, stdout);
-            break;
-        }
-    }
-    fputc('"', stdout);
-}
-
 /* ── JSON export ─────────────────────────────────────────────── */
 
 void export_tasks_json(const task_t *tasks, int count)
@@ -136,25 +101,25 @@ void export_tasks_json(const task_t *tasks, int count)
         printf("  {\n");
         printf("    \"id\": %lld,\n", (long long)t->id);
         printf("    \"title\": ");
-        json_string(t->title);
+        json_str(stdout, t->title);
         printf(",\n");
         printf("    \"description\": ");
-        json_string(t->description);
+        json_str(stdout, t->description);
         printf(",\n");
         printf("    \"type\": \"%s\",\n", task_type_to_str(t->type));
         printf("    \"priority\": \"%s\",\n", priority_to_str(t->priority));
         printf("    \"status\": \"%s\",\n", status_to_str(t->status));
         printf("    \"scope\": ");
-        json_string(t->scope);
+        json_str(stdout, t->scope);
         printf(",\n");
         printf("    \"due_date\": ");
-        json_string(t->due_date);
+        json_str(stdout, t->due_date);
         printf(",\n");
         printf("    \"created_at\": ");
-        json_string(t->created_at);
+        json_str(stdout, t->created_at);
         printf(",\n");
         printf("    \"updated_at\": ");
-        json_string(t->updated_at);
+        json_str(stdout, t->updated_at);
         printf("\n");
         printf("  }%s\n", (i < count - 1) ? "," : "");
     }

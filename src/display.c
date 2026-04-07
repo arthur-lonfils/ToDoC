@@ -1,4 +1,5 @@
 #include "display.h"
+#include "output.h"
 #include "util.h"
 
 #include <stdarg.h>
@@ -33,6 +34,11 @@ void display_init(void)
         return;
     }
     g_use_color = isatty(STDOUT_FILENO);
+}
+
+void display_disable_color(void)
+{
+    g_use_color = 0;
 }
 
 static const char *clr(const char *code)
@@ -421,6 +427,13 @@ void display_project_list(const project_t *projects, int count)
 
 void display_success(const char *fmt, ...)
 {
+    if (output_is_ai()) {
+        /* output_* never reaches this branch in ai mode (it emits JSON
+         * directly), so any caller landing here is a straggler we want
+         * to silence — e.g. migrate.c progress lines that would
+         * otherwise pollute the JSON envelope. */
+        return;
+    }
     va_list args;
     va_start(args, fmt);
     fprintf(stdout, "%s✓%s ", clr(CLR_GREEN), clr(CLR_RESET));
@@ -431,6 +444,12 @@ void display_success(const char *fmt, ...)
 
 void display_error(const char *fmt, ...)
 {
+    if (output_is_ai()) {
+        /* Same defensive guard as display_success — legitimate error
+         * paths in ai mode go through output_error, which emits a JSON
+         * envelope directly. Anything reaching here is a straggler. */
+        return;
+    }
     va_list args;
     va_start(args, fmt);
     fprintf(stderr, "%s✗%s ", clr(CLR_RED), clr(CLR_RESET));
@@ -441,6 +460,9 @@ void display_error(const char *fmt, ...)
 
 void display_warn(const char *fmt, ...)
 {
+    if (output_is_ai()) {
+        return; /* hints are human-only; don't pollute the JSON envelope */
+    }
     va_list args;
     va_start(args, fmt);
     fprintf(stdout, "%s⚠%s ", clr(CLR_YELLOW), clr(CLR_RESET));
@@ -451,6 +473,9 @@ void display_warn(const char *fmt, ...)
 
 void display_info(const char *fmt, ...)
 {
+    if (output_is_ai()) {
+        return; /* hints are human-only; don't pollute the JSON envelope */
+    }
     va_list args;
     va_start(args, fmt);
     fprintf(stdout, "%s·%s ", clr(CLR_BLUE), clr(CLR_RESET));

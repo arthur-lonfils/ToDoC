@@ -6,6 +6,9 @@
 /* Detect if stdout is a TTY; set up color support */
 void display_init(void);
 
+/* Force-disable color output (used by output.c when entering ai mode). */
+void display_disable_color(void);
+
 /* ── Task output ─────────────────────────────────────────────── */
 
 /* Compact one-line row for list view */
